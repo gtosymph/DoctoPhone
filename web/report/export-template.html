@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bilan de santé</title>
+<!--
+  Rapport de santé autonome.
+
+  Ce fichier est produit par l'application. Il ne dépend d'aucun réseau, d'aucune police
+  distante et d'aucune bibliothèque : les styles, le moteur de dessin et les données
+  sont inclus ci-dessous. Il s'ouvre dans n'importe quel navigateur et il s'imprime.
+
+  ATTENTION : ce fichier contient vos mesures de santé. Ne le partagez qu'avec des
+  personnes à qui vous voulez les confier.
+
+  Ce gabarit est la source unique de l'export. Les deux versions de l'application le
+  remplissent en remplaçant trois marqueurs, chacun présent une seule fois plus bas :
+  celui des styles, dans la balise « style » ; celui des scripts, dans la première balise
+  « script » ; et celui du modèle, dans la balise de type application/json.
+
+  Ce commentaire ne les écrit pas littéralement, et c'est volontaire. Les citer ici en
+  créerait une seconde occurrence, et un remplacement qui ne traite que la première
+  laisserait le vrai emplacement intact. Le défaut s'est produit ; ne le réintroduisez pas.
+
+  Le JSON doit être échappé avant d'être posé : chaque caractère inférieur y devient sa
+  séquence Unicode u003c. Sans cela, une chaîne contenant une balise fermante de script
+  couperait le document en deux.
+-->
+<style>
+{{STYLES}}
+</style>
+</head>
+<body>
+<div id="ha-root"></div>
+<script>
+{{SCRIPTS}}
+</script>
+<script id="ha-model" type="application/json">{{MODEL}}</script>
+<script>
+(function (global) {
+  'use strict';
+  var raw = document.getElementById('ha-model').textContent;
+  var root = document.getElementById('ha-root');
+  try {
+    global.HA.report.renderReport(root, JSON.parse(raw));
+  } catch (error) {
+    root.textContent = 'Ce rapport n’a pas pu être lu.';
+    if (global.console) global.console.error(error);
+  }
+}(window));
+</script>
+</body>
+</html>

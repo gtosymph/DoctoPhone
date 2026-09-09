@@ -1,0 +1,464 @@
+/*
+ * Health Analyzer — Web. Coquille de l'application (en-tête, onglets, import,
+ * conversation — mise en page seulement, réglages).
+ *
+ * Cette feuille ne redéfinit aucune couleur de fond : elle réutilise les jetons posés
+ * par `report/report.css` (`--page`, `--surface`, `--ink`, `--ink-2`, `--muted`,
+ * `--ring`, `--grid`, `--axis`, `--accent`, `--accent-soft`, `--good-text`,
+ * `--warning`, `--critical`), chargé juste avant elle dans `index.html`. Le rapport
+ * et la coquille partagent ainsi exactement la même palette « éditorial coloré »,
+ * y compris ses trois états de thème (clair, sombre système, sombre forcé par
+ * `data-theme`) — voir le commentaire en tête de `report.css`.
+ *
+ * `--accent-contrast` vient lui aussi de `report.css`, et cette feuille ne le
+ * redéfinit pas. Il a une raison d'être précise : en thème sombre, `--accent` devient
+ * un lavande clair sur lequel du texte blanc tombe à 3,13:1, sous le seuil de 4,5:1.
+ * L'encre foncée #14130f y remonte à 5,95:1. Les deux feuilles posent du texte sur cet
+ * aplat — le bouton d'envoi ici, le rond du plan d'action dans le rapport — donc le
+ * jeton vit à un seul endroit, sinon les deux dériveront.
+ */
+
+:root {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--page);
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+/* ============================================================ en-tête / onglets */
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1rem 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--grid);
+}
+
+.app-header h1 {
+  margin: 0;
+  flex: 0 0 auto;
+  font-size: clamp(1.05rem, 2.4vw, 1.35rem);
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+
+/* Piste d'onglets défilante à l'horizontale : sur un petit écran, on préfère un
+   glissement discret au retour à la ligne, qui casserait la ligne d'en-tête. */
+.tabs {
+  display: flex;
+  gap: 1.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+
+/* Nav « éditorial » : un soulignement de couleur, pas un bouton plein. La couleur
+   ne porte jamais seule l'état actif — l'épaisseur du trait et le poids de la
+   police changent aussi. */
+.tab {
+  flex: 0 0 auto;
+  padding: 0.4rem 0.1rem 0.6rem;
+  border: none;
+  border-bottom: 2.5px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tab:hover { color: var(--ink); }
+
+.tab.active {
+  color: var(--ink);
+  font-weight: 700;
+  border-bottom-color: var(--accent);
+}
+
+main { max-width: 1100px; margin: 0 auto; padding: 1.75rem 1.5rem 3rem; }
+
+.view { display: none; }
+.view.active { display: block; }
+
+/* Amorce numérotée au-dessus de chaque titre de vue, dans l'esprit des sections
+   numérotées du rapport (`.ha-idx` de report.css) : un même repère visuel côté
+   coquille et côté rapport. */
+.view-eyebrow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.view-idx {
+  color: var(--ink-2);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+h2 {
+  margin: 0 0 .75rem;
+  font-size: clamp(1.4rem, 3.4vw, 1.85rem);
+  letter-spacing: -.015em;
+}
+
+.hint { color: var(--ink-2); font-size: 0.9rem; }
+
+/* ============================================================ focus clavier */
+
+button:focus-visible,
+.tab:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ============================================================ import */
+
+.import-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.import-option {
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 12px;
+  padding: 1.1rem 1.2rem;
+}
+
+.import-option .import-option-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.7rem;
+}
+
+.import-option label { display: block; font-weight: 650; margin: 0; }
+
+/* Distingue l'option recommandée sans lui faire porter seule une hiérarchie de
+   couleur : un badge textuel, repris du vocabulaire de pastille du rapport
+   (`.ha-pill`, bordure de la couleur du texte, capitales discrètes). */
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .02em;
+}
+.pill.accent { color: var(--accent); }
+
+/* Bouton natif de sélection de fichier, redessiné pour ressembler à un bouton
+   secondaire de l'application plutôt qu'au bouton par défaut du navigateur. */
+input[type="file"] {
+  color: var(--ink-2);
+  font-size: 0.88rem;
+}
+input[type="file"]::file-selector-button,
+input[type="file"]::-webkit-file-upload-button {
+  margin-right: 0.7rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 7px;
+  border: 1px solid var(--ring);
+  background: var(--page);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+input[type="file"]::file-selector-button:hover,
+input[type="file"]::-webkit-file-upload-button:hover {
+  border-color: var(--accent);
+}
+
+.import-progress { margin: 1.5rem 0; }
+.import-progress progress {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: none;
+  background: var(--ring);
+}
+.import-progress progress::-webkit-progress-bar { background: var(--ring); border-radius: 999px; }
+.import-progress progress::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
+.import-progress progress::-moz-progress-bar { background: var(--accent); border-radius: 999px; }
+.import-progress p { margin: 0.6rem 0 0; color: var(--ink-2); font-size: 0.9rem; }
+
+.import-summary {
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-top: 1rem;
+}
+
+.import-summary .success,
+.import-summary .error {
+  display: inline-block;
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+}
+.import-summary .success { color: var(--good-text); }
+.import-summary .error { color: var(--critical); }
+.import-summary ul.counts {
+  columns: 2;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.import-summary ul.warnings { color: var(--warning); margin-top: 0.75rem; }
+
+/* ============================================================ en-têtes de vue */
+
+.view-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: .25rem; }
+
+.period-select { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: var(--ink-2); }
+.period-select select {
+  padding: 0.4rem 0.6rem;
+  border-radius: 7px;
+  border: 1px solid var(--ring);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* ============================================================ états vide / attente */
+
+.empty-state {
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  color: var(--ink-2);
+  border: 1px dashed var(--axis);
+  border-radius: 12px;
+}
+
+.empty-state button { margin-top: 0.9rem; }
+
+/* État d'attente du rapport (calcul du modèle en cours). Même carcasse visuelle
+   que `.empty-state`, sans le trait pointillé (rien à inviter à faire ici). */
+.loading-state {
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  color: var(--ink-2);
+}
+
+/* ============================================================ actions du rapport */
+
+.report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.report-action { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; max-width: 420px; }
+.report-action .hint { margin: 0; }
+
+.report-inline-status { font-size: 0.85rem; font-weight: 600; }
+.report-inline-status.loading { color: var(--ink-2); font-weight: 500; }
+.report-inline-status.error { color: var(--critical); }
+.report-inline-status.info { color: var(--warning); }
+.report-inline-status.success { color: var(--good-text); }
+
+/* ============================================================ conversation (coquille web) */
+
+/* L'onglet Analyse (conversation). Le fil de messages lui-même (`#chat-messages`,
+   classe `.ha-chat`, y compris son amorce de premier usage) est stylé par
+   `chat/chat.css`, partagé avec la coquille Android : seules la mise en page de
+   la colonne, la liste défilante et le compositeur — propres à la version web
+   — vivent ici.
+   `#chat-container` est une colonne flex de hauteur bornée au viewport : la
+   zone de messages prend toute la place disponible et défile sur elle-même, le
+   compositeur reste ancré en bas au lieu de flotter au milieu d'un écran
+   encore vide. */
+#chat-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 300px);
+  min-height: 420px;
+  max-height: 900px;
+  margin-top: 1rem;
+}
+
+/* `display: flex` d'une règle d'auteur l'emporte sur le `display: none` de la
+   feuille de style du navigateur pour `[hidden]` (même spécificité pour une
+   classe, spécificité supérieure pour un id) : sans cette ligne, un élément
+   caché par `.hidden = true` resterait visible. */
+#chat-container[hidden] { display: none; }
+
+#chat-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.25rem 0.1rem;
+}
+
+.chat-composer { flex: 0 0 auto; display: flex; gap: 0.6rem; align-items: flex-end; margin-top: 0.9rem; }
+
+.chat-composer textarea {
+  flex: 1;
+  resize: vertical;
+  min-height: 2.6rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--ring);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+.chat-composer textarea:focus-visible { border-color: var(--accent); }
+
+.chat-composer button {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.chat-composer button:disabled { opacity: 0.6; cursor: progress; }
+
+.disclaimer {
+  margin-top: 1.5rem;
+  padding: 0.75rem 0 0.75rem 1rem;
+  border-left: 3px solid var(--warning);
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+/* ============================================================ réglages */
+
+.settings-group { margin-bottom: 1.4rem; max-width: 480px; }
+.settings-group label {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.settings-group select,
+#settings-model,
+#settings-api-key,
+#settings-sleep-target {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--ring);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+
+.key-input { display: flex; gap: 0.5rem; }
+.key-input input { flex: 1; }
+.key-input button {
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--ring);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+button.secondary {
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid var(--ring);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+button.secondary:hover { border-color: var(--accent); }
+
+button.danger {
+  padding: 0.55rem 1.05rem;
+  border-radius: 8px;
+  border: 1px solid var(--critical);
+  background: transparent;
+  color: var(--critical);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+/* Note d'avertissement dans la marge, comme `.ha-disclaimer` du rapport : un filet
+   de couleur, pas un pavé teinté — plus net, plus proche du langage éditorial. */
+.warning-box {
+  border-left: 3px solid var(--warning);
+  padding: 0.15rem 0 0.15rem 1rem;
+  font-size: 0.9rem;
+  color: var(--ink-2);
+  max-width: 640px;
+  margin-bottom: 1.25rem;
+}
+.warning-box strong { color: var(--ink); }
+
+.settings-status {
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  display: inline-block;
+  color: var(--ink-2);
+}
+
+.app-footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding: 1.5rem;
+  border-top: 1px solid var(--grid);
+  margin-top: 2rem;
+}
+
+@media (max-width: 600px) {
+  main { padding: 1.25rem 1rem 2.5rem; }
+  .import-summary ul.counts { columns: 1; }
+}

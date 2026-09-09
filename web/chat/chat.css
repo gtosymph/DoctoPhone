@@ -1,0 +1,83 @@
+/*
+ * Style de la conversation d'analyse.
+ *
+ * Fichier partagé : la version web le charge à côté de `styles.css`, la version
+ * Android le charge dans la WebView locale de `chat.html`, à côté de `report.css`.
+ * Cette feuille ne redéfinit aucune couleur : elle réutilise les variables de
+ * `report/report.css` (`--page`, `--surface`, `--ink`, `--ring`, `--accent`…),
+ * déjà chargé avant elle dans les deux coquilles — y compris le thème sombre et
+ * le bouton de bascule de thème, que `styles.css` ne connaît pas.
+ */
+
+.ha-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ha-chat-msg { display: flex; }
+.ha-chat-msg-user { justify-content: flex-end; }
+.ha-chat-msg-assistant { justify-content: flex-start; }
+
+.ha-chat-bubble {
+  max-width: 88%;
+  min-width: 0;
+  border-radius: 14px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--ring);
+}
+
+.ha-chat-msg-user .ha-chat-bubble {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+.ha-chat-text { white-space: pre-wrap; word-break: break-word; color: var(--ink); }
+.ha-chat-text p { margin: 0.5em 0; }
+.ha-chat-text p:first-child { margin-top: 0; }
+.ha-chat-text p:last-child { margin-bottom: 0; }
+.ha-chat-text ul, .ha-chat-text ol { margin: 0.5em 0; padding-left: 1.2em; }
+.ha-chat-text h1, .ha-chat-text h2, .ha-chat-text h3, .ha-chat-text h4 { margin: 0.6em 0 0.3em; }
+
+/* La carte de graphique réutilise `.ha-card` / `.ha-chart` / `.ha-note` de
+   `report.css`, avec un peu moins de respiration : elle vit dans une bulle
+   déjà marginée, pas dans la grille du rapport. */
+.ha-chat-chart-card { margin-top: 10px; padding: 12px 13px 10px; max-width: 100%; }
+.ha-chat-chart-card h3 { font-size: 14px; }
+
+@media (min-width: 720px) {
+  .ha-chat-bubble { max-width: 72%; }
+}
+
+/* Amorce de premier usage (`renderIntro` dans chat-view.js), montrée à la place des
+   messages tant qu'aucun n'a été échangé. `.ha-chat` porte déjà `display:flex;
+   flex-direction:column`, ce modificateur ne fait que centrer verticalement le peu de
+   contenu — l'appelant (web ou Android) borne la hauteur de `host` à sa façon. */
+.ha-chat.ha-chat-empty { justify-content: center; gap: 14px; }
+
+.ha-chat-intro-text { margin: 0; color: var(--ink-2); max-width: 46rem; }
+
+.ha-chat-suggestions { display: flex; flex-direction: column; gap: 8px; max-width: 46rem; }
+
+.ha-chat-suggestion {
+  text-align: left;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--ring);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.ha-chat-suggestion:hover { border-color: var(--accent); }
+
+/* Ce fichier est aussi chargé seul par `chat.html` (WebView Android), sans
+   `styles.css` : le focus clavier de la suggestion doit donc se suffire à
+   lui-même plutôt que de dépendre d'une règle globale posée côté web. */
+.ha-chat-suggestion:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

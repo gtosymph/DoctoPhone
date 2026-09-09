@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Essai du langage de graphiques</title>
+<link rel="stylesheet" href="report.css">
+<style>
+  html, body { margin: 0; background: var(--page); }
+  #bar { position: sticky; top: 0; z-index: 30; display: flex; gap: 10px; align-items: center;
+         padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--ring);
+         font: 13px -apple-system, system-ui, sans-serif; color: var(--ink); }
+  #bar button { font: inherit; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--ring); background: var(--page); color: var(--ink); }
+  #status { margin-left: auto; font-variant-numeric: tabular-nums; }
+  #status.ok { color: var(--good-text); } #status.ko { color: var(--critical); }
+  .case { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+  .case b { color: var(--ink); }
+  .prob { color: var(--serious); font-size: 12.5px; margin: 4px 0 0; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <b>Langage de graphiques</b>
+  <button id="theme">Basculer le thème</button>
+  <span id="status">—</span>
+</div>
+<div id="root" class="ha-report"></div>
+
+<script src="../lib/report-model.js"></script>
+<script src="report-engine.js"></script>
+<script src="chart-catalog.js"></script>
+<script src="chart-spec.js"></script>
+<script>
+/**
+ * Page d'essai du langage de graphiques.
+ *
+ * Elle passe des spécifications volontairement fautives — celles que les modèles écrivent
+ * réellement — pour vérifier que le validateur corrige ou signale au lieu de casser.
+ */
+(function (global) {
+  'use strict';
+  const root = document.getElementById('root');
+  const status = document.getElementById('status');
+  let errors = 0;
+  const original = console.error;
+  console.error = function () { errors += 1; return original.apply(console, arguments); };
+
+  const CASES = [
+    ['Série désignée, courbe simple',
+      { mark: 'line', title: 'Durée de sommeil, nuit par nuit', series: [{ ref: 'sleep.nightly.hours' }] }],
+    ['Bande cible, bornes inversées par le modèle',
+      { mark: 'line', title: 'Sommeil avec zone cible', targetBand: { low: 9, high: 7 },
+        series: [{ ref: 'sleep.nightly.hours' }] }],
+    ['Deux séries sur le même axe',
+      { mark: 'line', title: 'FC de repos et FC moyenne par mois',
+        series: [{ ref: 'heart.monthly.resting' }, { ref: 'heart.monthly.average' }] }],
+    ['Barres par jour de semaine',
+      { mark: 'bar', title: 'Pas par jour de semaine', series: [{ ref: 'activity.stepsDayOfWeek' }] }],
+    ['Aire, profil horaire',
+      { mark: 'area', title: 'Stress au fil de la journée', series: [{ ref: 'stress.hourly' }] }],
+    ['Nuage de points',
+      { mark: 'point', title: 'Heure de coucher', series: [{ ref: 'sleep.nightly.bedRel' }] }],
+    ['Valeurs fournies par le modèle',
+      { mark: 'bar', title: 'Comparaison calculée par le modèle',
+        series: [{ label: 'Avant', values: [{ x: 'sem. 1', y: 5.2 }, { x: 'sem. 2', y: 5.8 }, { x: 'sem. 3', y: 6.4 }] }] }],
+    ['Marque inconnue, corrigée',
+      { mark: 'donut', title: 'Marque inventée', series: [{ ref: 'sleep.monthly.meanHours' }] }],
+    ['Référence inexistante',
+      { mark: 'line', title: 'Série qui n\'existe pas', series: [{ ref: 'sleep.reves.duree' }] }],
+    ['Dates mal formées, points écartés',
+      { mark: 'line', title: 'Dates à la française',
+        series: [{ label: 'Essai', values: [{ x: '10/08/2026', y: 6 }, { x: '2026-08-11', y: 7 }, { x: '2026-08-12', y: 6.5 }] }] }],
+    ['Axes incompatibles entre deux séries',
+      { mark: 'line', title: 'Mélange impossible',
+        series: [{ ref: 'sleep.nightly.hours' }, { ref: 'sleep.dayOfWeek' }] }],
+    ['Série vide',
+      { mark: 'line', title: 'Rien à tracer', series: [{ label: 'Vide', values: [] }] }],
+  ];
+
+  function run() {
+    errors = 0;
+    root.textContent = '';
+    let drawn = 0;
+    let handled = 0;
+
+    for (const [name, spec] of CASES) {
+      const card = document.createElement('div');
+      card.className = 'ha-card';
+      card.style.marginBottom = '14px';
+
+      const h = document.createElement('h3');
+      h.textContent = name;
+      card.appendChild(h);
+
+      const holder = document.createElement('div');
+      holder.className = 'ha-chart';
+      card.appendChild(holder);
+
+      let problems = [];
+      try {
+        problems = global.HA.chartSpec.render(holder, spec, global.__MODEL__) || [];
+      } catch (error) {
+        problems = ['exception : ' + error.message];
+        errors += 1;
+      }
+      if (holder.querySelector('svg')) drawn += 1;
+      if (problems.length) {
+        handled += 1;
+        const p = document.createElement('p');
+        p.className = 'prob';
+        p.textContent = 'signalé : ' + problems.join(' · ');
+        card.appendChild(p);
+      }
+      root.appendChild(card);
+    }
+
+    status.textContent = `${drawn}/${CASES.length} tracés · ${handled} cas signalés · ${errors} erreur(s)`;
+    status.className = errors === 0 ? 'ok' : 'ko';
+  }
+
+  document.getElementById('theme').addEventListener('click', () => {
+    const now = document.documentElement.getAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', now === 'dark' ? 'light' : 'dark');
+    run();
+  });
+
+  fetch('/test/out/web.json')
+    .then(r => r.json())
+    .then(model => { global.__MODEL__ = model; run(); })
+    .catch(error => { status.textContent = 'modèle introuvable : ' + error.message; status.className = 'ko'; });
+}(window));
+</script>
+</body>
+</html>

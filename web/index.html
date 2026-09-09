@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Health Analyzer — Web</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="report/report.css" />
+  <link rel="stylesheet" href="chat/chat.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Health Analyzer</h1>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-view="import" type="button">Import</button>
+      <button class="tab" data-view="dashboard" type="button">Rapport</button>
+      <button class="tab" data-view="analysis" type="button">Analyse</button>
+      <button class="tab" data-view="settings" type="button">Réglages</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ======================= IMPORT ======================= -->
+    <section id="view-import" class="view active">
+      <p class="view-eyebrow"><span class="view-idx">01</span> Import</p>
+      <h2>Importer un export Samsung Health</h2>
+      <p class="hint">
+        Dans Samsung Health : <strong>Paramètres → Télécharger les données personnelles</strong>.
+        Choisissez directement le dossier d'export, ou une archive ZIP de ce dossier.
+        Tout le traitement se fait dans votre navigateur : aucune donnée de santé n'est envoyée
+        à un serveur, sauf lors d'un appel explicite à l'analyse par LLM.
+      </p>
+
+      <div class="import-options">
+        <div class="import-option">
+          <div class="import-option-head">
+            <label for="import-directory">Dossier d'export</label>
+            <span class="pill accent">Recommandé</span>
+          </div>
+          <input type="file" id="import-directory" webkitdirectory directory multiple />
+        </div>
+        <div class="import-option">
+          <div class="import-option-head">
+            <label for="import-zip">Archive ZIP</label>
+          </div>
+          <input type="file" id="import-zip" accept=".zip" />
+        </div>
+      </div>
+
+      <div id="import-progress" class="import-progress" hidden>
+        <progress id="import-progress-bar" max="100" value="0"></progress>
+        <p id="import-progress-text">Préparation…</p>
+      </div>
+
+      <div id="import-summary" class="import-summary" hidden></div>
+    </section>
+
+    <!-- ======================= DASHBOARD ======================= -->
+    <section id="view-dashboard" class="view">
+      <p class="view-eyebrow"><span class="view-idx">02</span> Rapport</p>
+      <div class="view-header">
+        <h2>Rapport</h2>
+        <label class="period-select">
+          Période
+          <select id="dashboard-period">
+            <option value="7">7 jours</option>
+            <option value="30" selected>30 jours</option>
+            <option value="90">90 jours</option>
+            <option value="365">365 jours</option>
+            <option value="all">Tout l'historique</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="dashboard-empty" class="empty-state" hidden>
+        <p id="dashboard-empty-text">Aucune donnée importée.</p>
+        <button id="dashboard-go-import" type="button" class="secondary">Aller à l'import</button>
+      </div>
+
+      <div id="dashboard-loading" class="loading-state" hidden>
+        <p>Calcul du rapport…</p>
+      </div>
+
+      <div id="report-actions" class="report-actions" hidden>
+        <div class="report-action">
+          <button id="report-narrative-btn" type="button" class="secondary">Rédiger le bilan</button>
+          <div id="report-narrative-status" class="report-inline-status" hidden></div>
+        </div>
+        <div class="report-action">
+          <button id="report-export-btn" type="button" class="secondary">Exporter le rapport</button>
+          <p class="hint">Ce fichier contiendra vos mesures de santé : ne le partagez qu'en connaissance de cause.</p>
+          <div id="report-export-status" class="report-inline-status" hidden></div>
+        </div>
+      </div>
+
+      <div id="dashboard-content" hidden></div>
+    </section>
+
+    <!-- ======================= ANALYSE ======================= -->
+    <section id="view-analysis" class="view">
+      <p class="view-eyebrow"><span class="view-idx">03</span> Analyse</p>
+      <div class="view-header">
+        <h2>Analyse</h2>
+        <button id="chat-clear" type="button" class="secondary">Effacer la conversation</button>
+      </div>
+
+      <div id="chat-empty" class="empty-state" hidden>
+        <p>Aucune donnée importée.</p>
+        <button id="chat-go-import" type="button" class="secondary">Aller à l'import</button>
+      </div>
+
+      <div id="chat-container" hidden>
+        <div id="chat-messages" class="ha-chat"></div>
+
+        <div id="chat-status" class="report-inline-status" hidden></div>
+
+        <form id="chat-form" class="chat-composer">
+          <textarea id="chat-input" rows="2" placeholder="Posez une question sur vos données…"></textarea>
+          <button id="chat-send" type="submit">Envoyer</button>
+        </form>
+      </div>
+
+      <p class="disclaimer">
+        Cette analyse ne remplace pas un avis médical.
+      </p>
+    </section>
+
+    <!-- ======================= RÉGLAGES ======================= -->
+    <section id="view-settings" class="view">
+      <p class="view-eyebrow"><span class="view-idx">04</span> Réglages</p>
+      <h2>Réglages</h2>
+
+      <div class="settings-group">
+        <label for="settings-provider">Fournisseur LLM</label>
+        <select id="settings-provider">
+          <option value="gemini">Google Gemini</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="openai">OpenAI</option>
+        </select>
+      </div>
+
+      <div class="settings-group">
+        <label for="settings-api-key">Clé API</label>
+        <div class="key-input">
+          <input type="password" id="settings-api-key" autocomplete="off" placeholder="Collez votre clé API" />
+          <button id="toggle-key-visibility" type="button" aria-label="Montrer la clé">👁</button>
+        </div>
+        <button id="clear-key" type="button" class="secondary">Effacer la clé</button>
+      </div>
+
+      <div class="settings-group">
+        <label for="settings-model">Modèle</label>
+        <input type="text" id="settings-model" placeholder="Modèle par défaut du fournisseur" />
+      </div>
+
+      <div class="settings-group">
+        <label for="settings-sleep-target">Objectif de sommeil (heures)</label>
+        <input type="number" id="settings-sleep-target" min="4" max="12" step="0.25" />
+      </div>
+
+      <div class="warning-box">
+        <strong>Attention.</strong> La clé API est enregistrée dans le stockage local (<code>localStorage</code>)
+        de votre navigateur. Tout script exécuté sur cette page pourrait la lire, et elle reste visible
+        dans les outils de développement du navigateur. Cette page est prévue pour un usage local et
+        personnel, jamais pour être hébergée publiquement.
+      </div>
+
+      <div class="settings-group">
+        <button id="clear-all-data" type="button" class="danger">Effacer toutes les données locales</button>
+        <p class="hint">Efface la clé API, les réglages et les agrégats importés (IndexedDB).</p>
+      </div>
+
+      <div id="settings-status" class="settings-status" hidden></div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>Health Analyzer — Web. Aucune donnée de santé ne quitte votre appareil sans votre action explicite.</p>
+  </footer>
+
+  <script src="lib/csv.js"></script>
+  <script src="lib/mappers.js"></script>
+  <script src="lib/mappers-clinical.js"></script>
+  <script src="lib/hrv.js"></script>
+  <script src="lib/aggregate.js"></script>
+  <script src="lib/importer.js"></script>
+  <script src="lib/prompt.js"></script>
+  <script src="lib/markdown.js"></script>
+  <script src="lib/llm.js"></script>
+  <script src="lib/chat.js"></script>
+  <script src="lib/db.js"></script>
+  <script src="lib/stats.js"></script>
+  <script src="lib/correlation.js"></script>
+  <script src="lib/report-model.js"></script>
+  <script src="report/report-engine.js"></script>
+  <script src="report/chart-catalog.js"></script>
+  <script src="report/chart-spec.js"></script>
+  <script src="report/report-charts-sleep.js"></script>
+  <script src="report/report-charts-heart.js"></script>
+  <script src="report/report-charts-activity.js"></script>
+  <script src="report/report-charts-vitals.js"></script>
+  <script src="report/report-sections.js"></script>
+  <script src="report/report-render.js"></script>
+  <!-- Sections du rapport (construisent le modèle depuis les mesures brutes) : doivent
+       charger après report/report-sections.js, qui crée HA.reportSections, sur lequel
+       elles ajoutent leurs fonctions. -->
+  <script src="lib/report-sections/util.js"></script>
+  <script src="lib/report-sections/sleep.js"></script>
+  <script src="lib/report-sections/heart.js"></script>
+  <script src="lib/report-sections/activity.js"></script>
+  <script src="lib/report-sections/body.js"></script>
+  <script src="lib/report-sections/stress.js"></script>
+  <script src="lib/report-sections/breathing.js"></script>
+  <script src="lib/report-sections/tiles.js"></script>
+  <script src="lib/report-builder.js"></script>
+  <script src="lib/narrative.js"></script>
+  <script src="lib/report-export.js"></script>
+  <script src="chat/chat-view.js"></script>
+  <script src="app-report.js"></script>
+  <script src="app-report-ui.js"></script>
+  <script src="app-chat.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

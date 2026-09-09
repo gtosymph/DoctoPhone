@@ -1,0 +1,45 @@
+# --- Sorties de compilation ---------------------------------------------------
+*.iml
+.gradle/
+.kotlin/
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+
+# --- Signature ----------------------------------------------------------------
+# Une clé de signature ne se versionne jamais. Celle qui signe les APK de ce dépôt
+# vit dans le secret GitHub ANDROID_KEYSTORE_BASE64, et nulle part ailleurs.
+*.keystore
+*.jks
+
+# --- Sorties de tâches --------------------------------------------------------
+# Copié depuis web/report/ et web/lib/ par la tâche Gradle syncReportAssets — jamais écrit à la main.
+app/src/main/assets/
+
+# Sortie du harnais de parité web (web/test/parity.js) — un résultat, pas une source.
+web/test/out/
+
+# --- Données de santé : à ne JAMAIS versionner --------------------------------
+# Le dépôt est public. Un export Samsung Health contient des mesures nominatives,
+# et un fichier publié une fois reste publié même après suppression du commit.
+# La racine du projet sert de dossier de travail pour les essais sur export réel :
+# ces motifs couvrent tout ce que Samsung Health produit.
+#
+# Le seul jeu de données versionné est shared-fixtures/parity-input.json, qui est
+# entièrement synthétique (voir shared-fixtures/README.md).
+*.binning_data.json
+*.histogram.json
+com.samsung.*.csv
+com.samsung.*.json
+*.livedata.json
+/export_*/
+/samsunghealth_*/
+
+# --- Journaux de session ------------------------------------------------------
+.remember/

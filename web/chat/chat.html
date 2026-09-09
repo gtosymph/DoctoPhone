@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Analyse — conversation</title>
+<link rel="stylesheet" href="../report/report.css">
+<link rel="stylesheet" href="chat.css">
+<style>
+  html, body { margin: 0; padding: 0; background: var(--page); }
+  #ha-chat-root { padding: 16px 16px 32px; }
+  #ha-chat-loading { padding: 40px 16px; text-align: center; color: var(--muted); font: 14px -apple-system, system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<div id="ha-chat-root">
+  <p id="ha-chat-loading">Préparation de la conversation…</p>
+  <div id="ha-chat-messages" class="ha-chat" hidden></div>
+</div>
+
+<script src="../lib/report-model.js"></script>
+<script src="../report/report-engine.js"></script>
+<script src="../report/chart-catalog.js"></script>
+<script src="../report/chart-spec.js"></script>
+<script src="../lib/markdown.js"></script>
+<script src="chat-view.js"></script>
+<script>
+/**
+ * Coquille de la conversation pour la WebView Android.
+ *
+ * Même contrat que `report/report.html` pour le rapport : cette page ne calcule
+ * rien, ne construit aucun prompt et n'accède à aucun réseau — `fetch(MODEL_URL)`
+ * ci-dessous ne sort pas de la WebView, `AnalysisScreen.kt` l'intercepte et sert le
+ * modèle depuis la mémoire du process, jamais depuis le réseau (voir
+ * `shouldInterceptRequest`, qui refuse tout le reste).
+ *
+ * Kotlin pousse la conversation déjà écrite par `evaluateJavascript` (petite : le texte
+ * des messages, borné). Le `ReportModel`, lui, ne voyage plus comme argument d'un
+ * script — mesuré à plusieurs centaines de kilooctets sur tout l'historique, le
+ * construire comme chaîne JavaScript doublerait ce poids en mémoire à chaque envoi (voir
+ * `ChatJsBridge.kt`). Kotlin signale seulement qu'une nouvelle version est prête
+ * (`setModelReady`), et cette page va la chercher elle-même par `fetch`.
+ *
+ * Le champ de saisie est natif côté Android : cette page n'en pose aucun. Elle
+ * fonctionne entièrement pilotée depuis l'extérieur, par `setConversation`,
+ * `setModelReady` et `setTheme`. Une conversation vide dessine sa propre amorce de
+ * premier usage (voir `chat-view.js`) ; un clic sur une suggestion appelle
+ * `AndroidChatHost.onSuggestion(text)` si l'objet existe, pour que l'écran natif
+ * remplisse son propre champ de saisie.
+ */
+(function (global) {
+  'use strict';
+
+  var MODEL_URL = 'https://appassets.androidplatform.net/model/conversation.json';
+
+  var loading = document.getElementById('ha-chat-loading');
+  var root = document.getElementById('ha-chat-messages');
+
+  /** Dernière conversation reçue, pour redessiner dès qu'un nouveau modèle arrive. */
+  var currentConversation = [];
+  /** Dernier modèle reçu, pour redessiner si la conversation est renvoyée seule. */
+  var currentModel = null;
+
+  function render() {
+    loading.hidden = true;
+    root.hidden = false;
+    global.HA.chat.render(root, currentConversation, currentModel || {}, { onSuggestion: onSuggestion });
+  }
+
+  /**
+   * Reçoit la conversation depuis Kotlin, et la dessine.
+   *
+   * @param {string|Array} json la conversation, `[{role, text, at}, …]`
+   */
+  function setConversation(json) {
+    try {
+      currentConversation = typeof json === 'string' ? JSON.parse(json) : json;
+      render();
+    } catch (error) {
+      root.hidden = true;
+      loading.hidden = false;
+      loading.textContent = 'La conversation n\'a pas pu être lue.';
+      if (global.console) global.console.error('[chat] conversation illisible', error);
+    }
+  }
+
+  /**
+   * Signal court envoyé par Kotlin : une nouvelle version du `ReportModel` de la
+   * fenêtre affichée est disponible à [MODEL_URL]. Cette page va la chercher
+   * elle-même — voir l'en-tête de fichier. Une conversation déjà affichée se
+   * redessine dès que le modèle arrive, pour que ses graphiques par référence se
+   * résolvent (voir `report/chart-catalog.js`) ; l'échec du fetch n'empêche pas la
+   * conversation de s'afficher, ses graphiques par référence tombent alors sur la
+   * note « non affiché » plutôt que de planter la page.
+   *
+   * @param {number} version défait-cache ; sans effet sur la lecture elle-même
+   */
+  function setModelReady(version) {
+    fetch(MODEL_URL + '?v=' + version, { cache: 'no-store' })
+      .then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      })
+      .then(function (model) {
+        currentModel = model;
+        render();
+      })
+      .catch(function (error) {
+        if (global.console) global.console.error('[chat] modèle illisible', error);
+      });
+  }
+
+  /**
+   * Force le thème clair ou sombre, comme `report/report.html`.
+   *
+   * @param {string} theme `dark`, `light`, ou toute autre valeur pour suivre le système
+   */
+  function setTheme(theme) {
+    if (theme === 'dark' || theme === 'light') {
+      document.documentElement.setAttribute('data-theme', theme);
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+  }
+
+  /**
+   * Transmet un texte à l'hôte natif, qui appelle le LLM et revient par un
+   * nouvel appel à `setConversation`. Cette page ne fait elle-même aucun appel
+   * réseau — voir la règle de confidentialité de la WebView dans CLAUDE.md.
+   *
+   * @param {string} text le texte à envoyer
+   */
+  function onSend(text) {
+    if (global.AndroidChatHost && global.AndroidChatHost.onSend) {
+      global.AndroidChatHost.onSend(text);
+    }
+  }
+
+  /**
+   * Relaie le clic sur une suggestion de l'amorce de premier usage à l'hôte
+   * natif, qui remplit son propre champ de saisie (le champ est natif côté
+   * Android, cette page n'en a pas). Sans `AndroidChatHost.onSuggestion`, le
+   * clic ne fait rien plutôt que de lever une erreur — voir `chat-view.js`.
+   *
+   * @param {string} text la question suggérée
+   */
+  function onSuggestion(text) {
+    if (global.AndroidChatHost && global.AndroidChatHost.onSuggestion) {
+      global.AndroidChatHost.onSuggestion(text);
+    }
+  }
+
+  global.HA.host = {
+    setConversation: setConversation, setModelReady: setModelReady, setTheme: setTheme,
+    onSend: onSend, onSuggestion: onSuggestion,
+  };
+
+  // Prévient l'hôte Android que la page est prête à recevoir la conversation.
+  // Sans ce signal, Kotlin pousserait le JSON avant que les scripts soient chargés.
+  if (global.AndroidChatHost && global.AndroidChatHost.onReady) {
+    global.AndroidChatHost.onReady();
+  }
+}(window));
+</script>
+</body>
+</html>

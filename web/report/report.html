@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bilan de santé</title>
+<link rel="stylesheet" href="report.css">
+<style>
+  html, body { margin: 0; padding: 0; background: var(--page); }
+  #ha-loading { padding: 40px 16px; text-align: center; color: var(--muted); font: 14px -apple-system, system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<div id="ha-root"><p id="ha-loading">Préparation du rapport…</p></div>
+
+<script src="../lib/report-model.js"></script>
+<script src="report-engine.js"></script>
+<script src="report-charts-sleep.js"></script>
+<script src="report-charts-heart.js"></script>
+<script src="report-charts-activity.js"></script>
+<script src="report-charts-vitals.js"></script>
+<script src="report-sections.js"></script>
+<script src="report-render.js"></script>
+<script>
+/**
+ * Coquille du rapport pour la WebView Android.
+ *
+ * Cette page ne calcule rien et n'accède à aucun réseau — `fetch(MODEL_URL)`
+ * ci-dessous ne sort pas de la WebView, `ReportScreen.kt` l'intercepte et sert le
+ * modèle depuis la mémoire du process (voir `shouldInterceptRequest`, qui refuse
+ * tout le reste), jamais depuis le réseau.
+ *
+ * Le code Kotlin charge cette page depuis `file:///android_asset/report/report.html`,
+ * puis signale seulement qu'une nouvelle version du modèle est prête
+ * (`setModelReady`, sans charge utile) : le construire comme argument d'un script
+ * doublerait son poids en mémoire à chaque rafraîchissement — voir `ReportJsBridge.kt`
+ * pour la mesure. Cette page va chercher le modèle elle-même par `fetch`. Le rapport
+ * lui-même est dessiné par le moteur partagé, le même que celui de la version web.
+ */
+(function (global) {
+  'use strict';
+
+  var MODEL_URL = 'https://appassets.androidplatform.net/model/report.json';
+
+  var root = document.getElementById('ha-root');
+
+  /**
+   * Signal envoyé par Kotlin : une nouvelle version du `ReportModel` est prête à
+   * [MODEL_URL]. Va la chercher et dessine le rapport.
+   *
+   * @param {number} version défait-cache ; sans effet sur la lecture elle-même
+   */
+  function setModelReady(version) {
+    fetch(MODEL_URL + '?v=' + version, { cache: 'no-store' })
+      .then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      })
+      .then(function (model) {
+        global.HA.report.renderReport(root, model);
+      })
+      .catch(function (error) {
+        root.textContent = 'Le rapport n\'a pas pu être lu.';
+        if (global.console) global.console.error('[rapport] modèle illisible', error);
+      });
+  }
+
+  /**
+   * Force le thème clair ou sombre.
+   *
+   * Sans appel, la page suit le réglage du système, comme la version web.
+   *
+   * @param {string} theme `dark`, `light`, ou toute autre valeur pour suivre le système
+   */
+  function setTheme(theme) {
+    if (theme === 'dark' || theme === 'light') {
+      document.documentElement.setAttribute('data-theme', theme);
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+  }
+
+  global.HA.host = { setModelReady: setModelReady, setTheme: setTheme };
+
+  // Prévient l'hôte Android que la page est prête à recevoir le modèle. Sans ce signal,
+  // Kotlin pousserait le JSON avant que les scripts soient chargés.
+  if (global.AndroidReportHost && global.AndroidReportHost.onReady) {
+    global.AndroidReportHost.onReady();
+  }
+}(window));
+</script>
+</body>
+</html>

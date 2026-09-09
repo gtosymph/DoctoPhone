@@ -1,0 +1,507 @@
+/*
+ * Feuille de style du rapport de santé.
+ *
+ * Ce fichier est partagé : la version web l'utilise directement, la version Android le
+ * charge dans une WebView locale depuis `file:///android_asset/report/`. Toute
+ * modification profite donc aux deux versions.
+ *
+ * Le rapport se lit sur un téléphone comme sur un écran large. La règle est simple :
+ * une seule colonne en dessous de 720 px, deux colonnes au-dessus. Les graphiques sont
+ * des SVG à `viewBox`, donc ils se redimensionnent sans perdre leurs proportions.
+ *
+ * Le rapport se lit aussi par onglet, un par domaine. La couleur du domaine (jetons
+ * `--d-*` ci-dessous) descend jusqu'à l'onglet actif, au filet de titre de section et
+ * aux intertitres de groupe, via l'attribut `data-domain` — voir « Domaines » plus bas.
+ */
+
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --ring: rgba(11, 11, 11, .10);
+  --accent: #4a3aa7;
+  --accent-soft: rgba(74, 58, 167, .08);
+  /* Texte lisible sur un aplat `--accent` (voir `.ha-step .ha-n`, le seul cas du
+   * fichier). Même jeton, mêmes valeurs que `web/styles.css` : les deux feuilles
+   * posent du texte sur le même violet et doivent y lire la même encre. */
+  --accent-contrast: #ffffff;
+  --s-blue: #2a78d6;
+  --s-magenta: #e87ba4;
+  --s-yellow: #eda100;
+  --s-aqua: #1baf7a;
+  --s-orange: #eb6834;
+  --s-violet: #4a3aa7;
+  --s-red: #e34948;
+  --good: #0ca30c;
+  --good-text: #006300;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --band: rgba(42, 120, 214, .07);
+
+  /* --- Couleurs de domaine (direction « éditorial coloré ») ---------------
+   * Chaque domaine porte sa couleur, du filet de titre jusqu'aux courbes.
+   * `-soft` sert de fond de bloc, `-line` de trait de graphique, `-ink` de texte
+   * lisible sur le fond clair du domaine. La couleur ne porte JAMAIS seule une
+   * information : un libellé la double toujours, pour le daltonisme et l'impression.
+   */
+  --d-sleep: #4a3aa7;
+  --d-sleep-soft: rgba(74, 58, 167, .09);
+  --d-sleep-ink: #3a2d85;
+  --d-heart: #cf3446;
+  --d-heart-soft: rgba(207, 52, 70, .09);
+  --d-heart-ink: #a8202f;
+  --d-activity: #0f8a68;
+  --d-activity-soft: rgba(15, 138, 104, .10);
+  --d-activity-ink: #0b6a50;
+  --d-body: #b56a0f;
+  --d-body-soft: rgba(181, 106, 15, .10);
+  --d-body-ink: #8d520a;
+  --d-vitality: #2a78d6;
+  --d-vitality-soft: rgba(42, 120, 214, .09);
+  --d-vitality-ink: #1f5da8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --ring: rgba(255, 255, 255, .10);
+    --accent: #9085e9;
+    --accent-soft: rgba(144, 133, 233, .12);
+    --accent-contrast: #14130f;
+    --s-blue: #3987e5;
+    --s-magenta: #d55181;
+    --s-yellow: #c98500;
+    --s-aqua: #199e70;
+    --s-orange: #d95926;
+    --s-violet: #9085e9;
+    --s-red: #e66767;
+    --good-text: #0ca30c;
+    --band: rgba(57, 135, 229, .10);
+
+  --d-sleep: #9085e9;
+  --d-sleep-soft: rgba(144, 133, 233, .15);
+  --d-sleep-ink: #b3abf1;
+  --d-heart: #f4707f;
+  --d-heart-soft: rgba(244, 112, 127, .15);
+  --d-heart-ink: #f9a0aa;
+  --d-activity: #2fc79a;
+  --d-activity-soft: rgba(47, 199, 154, .15);
+  --d-activity-ink: #6fdcbb;
+  --d-body: #eda13c;
+  --d-body-soft: rgba(237, 161, 60, .15);
+  --d-body-ink: #f3bf78;
+  --d-vitality: #4f9bf0;
+  --d-vitality-soft: rgba(79, 155, 240, .15);
+  --d-vitality-ink: #8bbcf6;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --ring: rgba(255, 255, 255, .10);
+  --accent: #9085e9;
+  --accent-soft: rgba(144, 133, 233, .12);
+  --accent-contrast: #14130f;
+  --s-blue: #3987e5;
+  --s-magenta: #d55181;
+  --s-yellow: #c98500;
+  --s-aqua: #199e70;
+  --s-orange: #d95926;
+  --s-violet: #9085e9;
+  --s-red: #e66767;
+  --good-text: #0ca30c;
+  --band: rgba(57, 135, 229, .10);
+
+  --d-sleep: #9085e9;
+  --d-sleep-soft: rgba(144, 133, 233, .15);
+  --d-sleep-ink: #b3abf1;
+  --d-heart: #f4707f;
+  --d-heart-soft: rgba(244, 112, 127, .15);
+  --d-heart-ink: #f9a0aa;
+  --d-activity: #2fc79a;
+  --d-activity-soft: rgba(47, 199, 154, .15);
+  --d-activity-ink: #6fdcbb;
+  --d-body: #eda13c;
+  --d-body-soft: rgba(237, 161, 60, .15);
+  --d-body-ink: #f3bf78;
+  --d-vitality: #4f9bf0;
+  --d-vitality-soft: rgba(79, 155, 240, .15);
+  --d-vitality-ink: #8bbcf6;
+}
+
+.ha-report {
+  background: var(--page);
+  color: var(--ink);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 20px 16px 64px;
+  margin: 0 auto;
+  max-width: 1040px;
+  -webkit-text-size-adjust: 100%;
+}
+
+.ha-report * { box-sizing: border-box; }
+
+/* ---------------------------------------------------------------- domaines */
+
+/*
+ * Un jeton de domaine posé en attribut — sur un onglet ou sur un panneau — et hérité
+ * par ses enfants : le filet de titre de section et les intertitres de groupe n'ont
+ * rien à savoir du domaine, ils lisent juste `--domaine*`. Synthèse et Tout ne posent
+ * pas l'attribut : `var(--domaine-*, repli)` retombe alors sur l'accent neutre.
+ */
+[data-domain="sleep"]    { --domain: var(--d-sleep);    --domain-soft: var(--d-sleep-soft);    --domain-ink: var(--d-sleep-ink); }
+[data-domain="heart"]    { --domain: var(--d-heart);    --domain-soft: var(--d-heart-soft);    --domain-ink: var(--d-heart-ink); }
+[data-domain="activity"] { --domain: var(--d-activity); --domain-soft: var(--d-activity-soft); --domain-ink: var(--d-activity-ink); }
+[data-domain="body"]     { --domain: var(--d-body);     --domain-soft: var(--d-body-soft);     --domain-ink: var(--d-body-ink); }
+[data-domain="vitality"] { --domain: var(--d-vitality); --domain-soft: var(--d-vitality-soft); --domain-ink: var(--d-vitality-ink); }
+
+/* ---------------------------------------------------------------- onglets */
+
+/*
+ * Piste d'onglets défilante à l'horizontale : sur un téléphone, sept onglets ne
+ * tiennent pas sur une ligne. Un retour à la ligne casserait la barre et pousserait
+ * tout le contenu vers le bas ; on préfère un glissement discret, comme le fait déjà
+ * `.tabs` dans `web/styles.css` pour la navigation de la coquille.
+ *
+ * `overscroll-behavior-x: contain` empêche un défilement arrivé en butée de se
+ * répercuter sur la page (et, dans la WebView Android, d'être confondu avec le geste
+ * système de retour arrière au bord de l'écran). `.ha-report` porte déjà 16px de marge
+ * horizontale, donc la piste ne touche jamais le bord physique de l'écran.
+ */
+.ha-tabbar-wrap {
+  position: relative;
+  margin-bottom: 22px;
+}
+.ha-tabbar {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--grid);
+}
+.ha-tabbar::-webkit-scrollbar { display: none; }
+
+/* Dégradé de bord : indique que la piste continue au-delà de l'écran. Posé sur le
+ * conteneur, pas sur la piste elle-même, pour ne jamais rogner l'anneau de focus d'un
+ * onglet. `report-render.js` bascule ces classes selon la position de défilement —
+ * jamais les deux dégradés en même temps aux extrémités réelles de la piste. */
+.ha-tabbar-wrap::before,
+.ha-tabbar-wrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 1px;
+  width: 28px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.ha-tabbar-wrap::before { left: 0; background: linear-gradient(to right, var(--page), transparent); }
+.ha-tabbar-wrap::after { right: 0; background: linear-gradient(to left, var(--page), transparent); }
+.ha-tabbar-wrap.ha-tab-fade-l::before { opacity: 1; }
+.ha-tabbar-wrap.ha-tab-fade-r::after { opacity: 1; }
+
+.ha-tab {
+  flex: 0 0 auto;
+  appearance: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-weight: 640;
+  font-size: 13.5px;
+  padding: 9px 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ha-tab:hover { background: var(--surface); color: var(--ink); }
+.ha-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ha-tab[aria-selected="true"] {
+  color: var(--domain-ink, var(--accent));
+  background: var(--domain-soft, var(--accent-soft));
+  border-bottom-color: var(--domain, var(--accent));
+}
+
+.ha-tabpanel { outline: none; }
+.ha-tabpanel:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 10px; }
+
+/* Un intertitre court devant un groupe de cartes de même cadence (jour, mois, profil). */
+.ha-group-title {
+  color: var(--domain-ink, var(--muted));
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  margin: 22px 0 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--ring);
+}
+.ha-group-title:first-child { margin-top: 0; }
+
+/* ---------------------------------------------------------------- en-tete */
+
+.ha-masthead { margin-bottom: 26px; }
+.ha-eyebrow {
+  color: var(--muted);
+  font-size: 12.5px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+}
+.ha-masthead h1 {
+  font-size: clamp(24px, 5vw, 34px);
+  line-height: 1.18;
+  letter-spacing: -.02em;
+  margin: 0 0 10px;
+}
+.ha-sub { color: var(--ink-2); margin: 0 0 14px; max-width: 62ch; }
+.ha-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+.ha-disclaimer {
+  border-left: 3px solid var(--warning);
+  padding: 8px 0 8px 12px;
+  color: var(--ink-2);
+  font-size: 13px;
+  margin: 0;
+}
+.ha-verdict {
+  background: var(--accent-soft);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin: 0 0 24px;
+}
+.ha-verdict .ha-lead { font-weight: 650; color: var(--ink); }
+.ha-verdict p { margin: 0; color: var(--ink-2); }
+
+/* ---------------------------------------------------------------- tuiles */
+
+.ha-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+  gap: 10px;
+  margin-bottom: 30px;
+}
+.ha-tile {
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 12px;
+  padding: 12px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ha-tile .ha-k { color: var(--muted); font-size: 12px; }
+.ha-tile .ha-v {
+  font-size: 25px;
+  font-weight: 640;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.ha-tile .ha-v small { font-size: 14px; font-weight: 500; color: var(--ink-2); }
+.ha-tile .ha-s { color: var(--muted); font-size: 12px; }
+.ha-pill {
+  align-self: flex-start;
+  margin-top: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.ha-pill.good { color: var(--good-text); }
+.ha-pill.warn { color: var(--warning); }
+.ha-pill.serious { color: var(--serious); }
+.ha-pill.critical { color: var(--critical); }
+.ha-pill.neutral { color: var(--muted); }
+
+/* ---------------------------------------------------------------- sections */
+
+.ha-section { margin-bottom: 40px; scroll-margin-top: 12px; }
+/* Le filet vertical porte la couleur du domaine ; le titre à côté la double en texte. */
+.ha-sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 11px;
+  margin-bottom: 10px;
+  padding-left: 11px;
+  border-left: 3px solid var(--domain, var(--ring));
+}
+.ha-idx {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 660;
+  font-variant-numeric: tabular-nums;
+}
+.ha-sec-head h2 {
+  font-size: clamp(19px, 3.4vw, 23px);
+  letter-spacing: -.015em;
+  margin: 0;
+}
+.ha-sec-verdict { color: var(--ink-2); margin: 0 0 16px; max-width: 74ch; }
+
+.ha-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.ha-kpi {
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.ha-kpi .ha-n {
+  display: block;
+  font-size: 19px;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+}
+.ha-kpi .ha-l { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+.ha-grid2 { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 720px) {
+  .ha-grid2 { grid-template-columns: 1fr 1fr; }
+  .ha-span2 { grid-column: 1 / -1; }
+}
+
+.ha-card {
+  background: var(--surface);
+  border: 1px solid var(--ring);
+  border-radius: 12px;
+  padding: 14px 15px 12px;
+  min-width: 0;
+}
+.ha-card h3 { font-size: 15px; margin: 0 0 3px; letter-spacing: -.01em; }
+.ha-note { color: var(--muted); font-size: 12.5px; margin: 0 0 10px; }
+
+.ha-chart { width: 100%; }
+.ha-chart svg { width: 100%; height: auto; display: block; overflow: visible; touch-action: pan-y; }
+
+.ha-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  font-size: 12px;
+  color: var(--ink-2);
+  margin: 0 0 8px;
+}
+.ha-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.ha-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+.ha-points { margin: 14px 0 0; padding-left: 20px; color: var(--ink-2); }
+.ha-points li { margin-bottom: 7px; }
+
+/* Un tableau large défile dans son propre conteneur : la carte, elle, ne bouge pas. */
+.ha-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.ha-mini { width: 100%; min-width: 300px; border-collapse: collapse; font-size: 13px; }
+.ha-mini th, .ha-mini td {
+  text-align: left;
+  padding: 6px 10px 6px 0;
+  border-bottom: 1px solid var(--grid);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ha-mini th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.ha-mini td:last-child { white-space: normal; }
+
+.ha-empty {
+  color: var(--muted);
+  font-size: 13px;
+  font-style: italic;
+  padding: 18px 0;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- plan */
+
+.ha-plan { display: flex; flex-direction: column; gap: 14px; }
+.ha-step { display: flex; gap: 13px; align-items: flex-start; }
+.ha-step .ha-n {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 660;
+}
+.ha-step h4 { margin: 2px 0 4px; font-size: 15px; }
+.ha-step p { margin: 0; color: var(--ink-2); }
+
+.ha-footer {
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid var(--grid);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* ---------------------------------------------------------------- infobulle */
+
+.ha-tooltip {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .12s;
+  background: var(--ink);
+  color: var(--page);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  max-width: 240px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .22);
+}
+.ha-tooltip b { font-weight: 640; }
+
+@media print {
+  .ha-report { max-width: none; padding: 0; }
+  .ha-card { break-inside: avoid; }
+  .ha-tooltip { display: none; }
+
+  /*
+   * Le papier n'a pas de clic : la barre d'onglets disparaît, et tous les panneaux
+   * sortent, dans l'ordre de lecture (Synthèse, puis chaque domaine). Le panneau
+   * « Tout » est le seul à rester caché — il répète exactement le contenu des autres
+   * panneaux, et le montrer aussi doublerait le rapport imprimé.
+   */
+  .ha-tabbar-wrap { display: none; }
+  .ha-tabpanel { display: block !important; }
+  .ha-tabpanel[data-tab="tout"] { display: none !important; }
+}

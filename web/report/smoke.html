@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Essai du moteur de rapport</title>
+<link rel="stylesheet" href="report.css">
+<style>
+  html, body { margin: 0; background: var(--page); }
+  #bar {
+    position: sticky; top: 0; z-index: 30; display: flex; gap: 10px; align-items: center;
+    padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--ring);
+    font: 13px -apple-system, system-ui, sans-serif; color: var(--ink);
+  }
+  #bar button { font: inherit; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--ring); background: var(--page); color: var(--ink); }
+  #status { margin-left: auto; font-variant-numeric: tabular-nums; }
+  #status.ok { color: var(--good-text); }
+  #status.ko { color: var(--critical); }
+</style>
+</head>
+<body>
+<div id="bar">
+  <b>Essai du moteur</b>
+  <button id="theme">Basculer le thème</button>
+  <button id="empty">Modèle vide</button>
+  <button id="full">Modèle complet</button>
+  <span id="status">—</span>
+</div>
+<div id="ha-root"></div>
+
+<script src="../lib/report-model.js"></script>
+<script src="report-engine.js"></script>
+<script src="report-charts-sleep.js"></script>
+<script src="report-charts-heart.js"></script>
+<script src="report-charts-activity.js"></script>
+<script src="report-charts-vitals.js"></script>
+<script src="report-sections.js"></script>
+<script src="report-render.js"></script>
+<script src="smoke-fixture.js"></script>
+<script>
+/**
+ * Page d'essai du moteur de rapport.
+ *
+ * Elle ne lit aucune donnée réelle : elle crée un modèle synthétique reproductible et
+ * le dessine. Elle sert à vérifier le moteur seul, sans import ni base de données, et à
+ * repérer une erreur de dessin avant l'intégration.
+ */
+(function (global) {
+  'use strict';
+
+  var root = document.getElementById('ha-root');
+  var status = document.getElementById('status');
+  var errors = 0;
+
+  var originalError = global.console.error;
+  global.console.error = function () {
+    errors += 1;
+    report();
+    return originalError.apply(global.console, arguments);
+  };
+  global.addEventListener('error', function () { errors += 1; report(); });
+
+  function report() {
+    status.textContent = errors === 0 ? 'aucune erreur' : errors + ' erreur(s) — voir la console';
+    status.className = errors === 0 ? 'ok' : 'ko';
+  }
+
+  function draw(model) {
+    errors = 0;
+    var problems = global.HA.reportModel.validateReportModel(model);
+    if (problems.length) {
+      errors += problems.length;
+      global.console.error('[essai] modèle invalide', problems);
+    }
+    global.HA.report.renderReport(root, model);
+    report();
+  }
+
+  document.getElementById('full').addEventListener('click', function () {
+    draw(global.HA.smokeFixture.build());
+  });
+  document.getElementById('empty').addEventListener('click', function () {
+    draw(global.HA.reportModel.emptyReportModel());
+  });
+  document.getElementById('theme').addEventListener('click', function () {
+    var now = document.documentElement.getAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', now === 'dark' ? 'light' : 'dark');
+  });
+
+  draw(global.HA.smokeFixture.build());
+}(window));
+</script>
+</body>
+</html>

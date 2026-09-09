@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Essai de la conversation</title>
+<link rel="stylesheet" href="../report/report.css">
+<link rel="stylesheet" href="chat.css">
+<style>
+  html, body { margin: 0; background: var(--page); }
+  #bar { position: sticky; top: 0; z-index: 30; display: flex; gap: 10px; align-items: center;
+         padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--ring);
+         font: 13px -apple-system, system-ui, sans-serif; color: var(--ink); }
+  #bar button { font: inherit; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--ring); background: var(--page); color: var(--ink); }
+  #status { margin-left: auto; font-variant-numeric: tabular-nums; }
+  #status.ok { color: var(--good-text); } #status.ko { color: var(--critical); }
+  main { max-width: 720px; margin: 0 auto; padding: 20px 16px 64px; }
+  h2 { font: 600 15px -apple-system, system-ui, sans-serif; color: var(--ink); margin: 28px 0 10px; }
+  h2:first-child { margin-top: 0; }
+  #root-empty { border: 1px dashed var(--ring); border-radius: 12px; padding: 12px; min-height: 260px; }
+  #suggestion-log { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="bar">
+  <b>Conversation d'analyse</b>
+  <button id="theme">Basculer le thème</button>
+  <span id="status">—</span>
+</div>
+<main>
+  <h2>Amorce de premier usage (conversation vide)</h2>
+  <div id="root-empty" class="ha-chat"></div>
+  <p id="suggestion-log">Cliquez une suggestion pour vérifier <code>onSuggestion</code>.</p>
+
+  <h2>Conversation en cours</h2>
+  <div id="root" class="ha-chat"></div>
+</main>
+
+<script src="../lib/report-model.js"></script>
+<script src="../report/report-engine.js"></script>
+<script src="../report/chart-catalog.js"></script>
+<script src="../report/chart-spec.js"></script>
+<script src="../lib/markdown.js"></script>
+<script src="chat-view.js"></script>
+<script>
+/**
+ * Page d'essai de la conversation.
+ *
+ * Deux états, l'un au-dessus de l'autre : l'amorce de premier usage qu'une
+ * conversation vide dessine elle-même (celle que verra aussi la coquille
+ * Android, `chat.html`), et une conversation en cours d'exemple avec, dans
+ * l'ordre : du texte simple, un graphique valide (référence connue), un
+ * graphique refusé (référence inconnue — déjà géré par `chart-spec.js`, qui
+ * dessine sa propre note), et un graphique dont le JSON est illisible (géré
+ * ici, par `chat-view.js`).
+ */
+(function (global) {
+  'use strict';
+  const root = document.getElementById('root');
+  const rootEmpty = document.getElementById('root-empty');
+  const suggestionLog = document.getElementById('suggestion-log');
+  const status = document.getElementById('status');
+  let errors = 0;
+  const original = console.error;
+  console.error = function () { errors += 1; return original.apply(console, arguments); };
+
+  const CONVERSATION = [
+    { role: 'user', at: 1, text: 'Comment évolue mon sommeil ce mois-ci ?' },
+    { role: 'assistant', at: 2, text:
+`Votre durée moyenne de sommeil est stable autour de **6 h 40** sur la période. La régularité du coucher reste le point à travailler : l'écart-type dépasse 1 heure.
+
+\`\`\`healthchart
+{
+  "mark": "line",
+  "title": "Durée de sommeil, nuit par nuit",
+  "targetBand": { "low": 7, "high": 9 },
+  "series": [{ "ref": "sleep.nightly.hours" }]
+}
+\`\`\`
+
+Voulez-vous que je regarde la régularité du coucher plus en détail ?` },
+    { role: 'user', at: 3, text: 'Montre-moi une série qui n\'existe pas.' },
+    { role: 'assistant', at: 4, text:
+`Cette série n'existe pas dans le catalogue de la période — le graphique ci-dessous sera donc refusé, avec une explication à la place.
+
+\`\`\`healthchart
+{ "mark": "line", "title": "Série inexistante", "series": [{ "ref": "sleep.reves.duree" }] }
+\`\`\``},
+    { role: 'user', at: 5, text: 'Et un graphique cassé ?' },
+    { role: 'assistant', at: 6, text:
+`En voici un dont le JSON est illisible : le texte doit rester affiché, avec une note discrète à la place du graphique.
+
+\`\`\`healthchart
+{ mark: line, title: "JSON invalide" series: [] }
+\`\`\``},
+  ];
+
+  function onSuggestion(text) {
+    suggestionLog.textContent = 'Dernière suggestion cliquée : « ' + text + ' »';
+  }
+
+  function run() {
+    errors = 0;
+    let ok = true;
+    try {
+      global.HA.chat.render(rootEmpty, [], global.__MODEL__ || {}, { onSuggestion: onSuggestion });
+      global.HA.chat.render(root, CONVERSATION, global.__MODEL__ || {});
+    } catch (error) {
+      ok = false;
+      status.textContent = 'exception : ' + error.message;
+      status.className = 'ko';
+      if (global.console) original.call(console, error);
+      return;
+    }
+    const charts = root.querySelectorAll('.ha-chat-chart-card svg').length;
+    const notes = root.querySelectorAll('.ha-chat-chart-card .ha-note').length;
+    const bubbles = root.querySelectorAll('.ha-chat-bubble').length;
+    const suggestions = rootEmpty.querySelectorAll('.ha-chat-suggestion').length;
+    const hasIntroText = rootEmpty.querySelector('.ha-chat-intro-text') !== null;
+    status.textContent = `${bubbles} messages · ${charts} graphique(s) tracé(s) · ${notes} note(s) discrète(s) · `
+      + `${suggestions} suggestion(s) · amorce ${hasIntroText ? 'présente' : 'absente'} · ${errors} erreur(s)`;
+    status.className = (ok && errors === 0 && suggestions === 4 && hasIntroText) ? 'ok' : 'ko';
+  }
+
+  document.getElementById('theme').addEventListener('click', () => {
+    const now = document.documentElement.getAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', now === 'dark' ? 'light' : 'dark');
+    run();
+  });
+
+  fetch('/test/out/web.json')
+    .then(r => r.json())
+    .then(model => { global.__MODEL__ = model; run(); })
+    .catch(error => { status.textContent = 'modèle introuvable, dessin sans données : ' + error.message; run(); });
+}(window));
+</script>
+</body>
+</html>

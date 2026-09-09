@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- N'expose que les sous-dossiers où ReportExporter et ApkDownloader écrivent, jamais le
+     cache entier. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="rapports" path="rapports/" />
+    <cache-path name="mises-a-jour" path="mises-a-jour/" />
+</paths>

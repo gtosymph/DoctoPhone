@@ -1,0 +1,150 @@
+# Publie une release GitHub à chaque poussée sur `main`.
+#
+# Aucune action tierce ne crée la release : `gh release create` est déjà présent sur les
+# runners GitHub, et ce dépôt est public — ajouter une action tierce pour un geste que
+# `gh` fait seul serait une dépendance de chaîne d'approvisionnement sans raison.
+#
+# Le numéro de version vient de `github.run_number`, qui ne fait que croître, même après
+# un `git revert` : c'est ce qui garantit qu'Android accepte toujours l'APK suivant comme
+# une mise à jour de celui déjà installé. Voir app/build.gradle.kts pour la lecture de
+# `versionCode`/`versionName`, et gradle.properties pour `appVersionBase`.
+#
+# Règle appliquée partout ci-dessous, sans exception : jamais de `${{ ... }}` interpolé
+# directement dans un `run:`. GitHub le remplace par du texte AVANT que le shell ne lise
+# la ligne, donc tout ce qui provient d'un contenu du dépôt (message de commit, nom de
+# branche...) s'exécuterait comme un fragment de script. Toute valeur passe par `env:`,
+# lue ensuite comme une variable shell normale.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+# Un second push pendant qu'une publication tourne encore doit attendre son tour, pas
+# annuler la première : chaque run_number doit correspondre à une release qui va au bout.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+        with:
+          # Historique complet et étiquettes, nécessaires pour lister les commits depuis
+          # la précédente release.
+          fetch-depth: 0
+
+      - name: Installer le JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Préparer Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Lancer les tests unitaires
+        # --rerun-tasks : le cache Gradle rendrait un `BUILD SUCCESSFUL` silencieux sans
+        # avoir relancé le moindre test. La barrière avant release doit être une vraie
+        # exécution, pas un résultat mis en cache d'un run précédent.
+        run: ./gradlew testDebugUnitTest --rerun-tasks
+
+      - name: Vérifier la présence des secrets de signature
+        # Sans ce garde-fou, un secret absent ou mal nommé ferait retomber la release sur
+        # la signature debug DU RUNNER GitHub (voir le repli documenté dans
+        # app/build.gradle.kts) — un keystore différent de celui de l'utilisateur. L'APK
+        # sortirait quand même, sous le même nom, et l'échec ne se verrait qu'au moment de
+        # l'installation sur l'appareil. On arrête ici plutôt que de publier un APK signé
+        # avec la mauvaise clé.
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          missing=()
+          [ -z "$ANDROID_KEYSTORE_BASE64" ] && missing+=(ANDROID_KEYSTORE_BASE64)
+          [ -z "$ANDROID_KEYSTORE_PASSWORD" ] && missing+=(ANDROID_KEYSTORE_PASSWORD)
+          [ -z "$ANDROID_KEY_ALIAS" ] && missing+=(ANDROID_KEY_ALIAS)
+          [ -z "$ANDROID_KEY_PASSWORD" ] && missing+=(ANDROID_KEY_PASSWORD)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Secret(s) de signature manquant(s) : ${missing[*]}" >&2
+            exit 1
+          fi
+
+      - name: Calculer le numéro et le nom de version
+        id: version
+        run: |
+          base=$(grep '^appVersionBase=' gradle.properties | cut -d= -f2)
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "name=${base}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Décoder le keystore de publication
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+
+      - name: Construire l'APK de publication
+        env:
+          # Les mots de passe passent par l'environnement, jamais en argument de ligne de
+          # commande : un argument atterrit dans le journal de la commande, une variable
+          # d'environnement nommée ici ne s'y affiche pas.
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: ./gradlew assembleRelease -PversionCode="$VERSION_CODE" -PversionName="$VERSION_NAME"
+
+      - name: Vérifier la signature de l'APK publié
+        # Contrôle de cohérence : si le garde-fou plus haut a laissé passer un cas
+        # inattendu, la construction s'arrête ici plutôt que de publier un APK dont la
+        # signature ne correspond à rien d'installable.
+        run: |
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n1)
+          "$apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk
+
+      - name: Nommer l'APK et écrire le contrat de version
+        id: artifact
+        env:
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: |
+          name="DoctoPhone-${VERSION_NAME}.apk"
+          mv "app/build/outputs/apk/release/app-release.apk" "$name"
+          cat > release.json <<JSON
+          {
+            "versionCode": ${VERSION_CODE},
+            "versionName": "${VERSION_NAME}",
+            "apk": "$name"
+          }
+          JSON
+          echo "apk=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Lister les commits depuis la précédente étiquette
+        run: |
+          previous_tag=$(git tag --sort=-creatordate | head -n 1)
+          if [ -n "$previous_tag" ]; then
+            git log "${previous_tag}..HEAD" --pretty='format:- %s (%h)' > notes.md
+          else
+            git log --pretty='format:- %s (%h)' > notes.md
+          fi
+
+      - name: Publier la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.version.outputs.name }}
+          APK_PATH: ${{ steps.artifact.outputs.apk }}
+        # Le corps de la release vient d'un fichier (--notes-file), jamais interpolé dans
+        # la commande : `notes.md` contient des messages de commit, un texte que rien ne
+        # contraint. Même règle pour le tag et le chemin de l'APK, par cohérence.
+        run: gh release create "$TAG" "$APK_PATH" release.json --title "$TAG" --notes-file notes.md

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Health Analyzer — Tests</title>
+  <!--
+    Nécessaire aux tests qui vérifient un comportement CSS du rapport (la piste
+    d'onglets qui défile au lieu de passer à la ligne, par exemple) : sans cette
+    feuille, les boutons de la barre d'onglets seraient de simples <button> en ligne,
+    et le test passerait pour la mauvaise raison. N'entre en conflit avec rien plus
+    bas : `body` garde ses propres couleurs, plus spécifiques que `:root` de report.css.
+  -->
+  <link rel="stylesheet" href="report/report.css" />
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; background: #f6f7f9; color: #1c2128; }
+    h1 { font-size: 1.3rem; }
+    .summary { font-weight: 700; padding: 0.6rem 1rem; border-radius: 8px; margin-bottom: 1rem; display: inline-block; }
+    .summary.ok { background: #d9f2e3; color: #1a8a4a; }
+    .summary.ko { background: #fbdede; color: #c0392b; }
+    ul#results { list-style: none; padding: 0; }
+    li { padding: 0.5rem 0.75rem; border-radius: 6px; margin-bottom: 0.35rem; background: #ffffff; border: 1px solid #dfe3e8; }
+    li.pass .icon { color: #1a8a4a; }
+    li.fail .icon { color: #c0392b; }
+    li.fail { border-color: #c0392b; }
+    .icon { font-weight: 700; margin-right: 0.5rem; }
+    .error { margin-top: 0.35rem; color: #c0392b; font-size: 0.85rem; font-family: monospace; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #14171c; color: #e8eaed; }
+      li { background: #1c2027; border-color: #2c313a; }
+      .summary.ok { background: #123a24; color: #4fd485; }
+      .summary.ko { background: #3a1c17; color: #ff6b5e; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Health Analyzer — Tests des fonctions pures</h1>
+  <p>Aucun framework : assertions maison sur le parseur CSV, les mappeurs et l'agrégateur.</p>
+  <div id="summary" class="summary">Exécution…</div>
+  <ul id="results"></ul>
+
+  <script src="lib/csv.js"></script>
+  <script src="lib/mappers.js"></script>
+  <script src="lib/mappers-clinical.js"></script>
+  <script src="lib/hrv.js"></script>
+  <script src="lib/db.js"></script>
+  <script src="lib/stats.js"></script>
+  <script src="lib/aggregate.js"></script>
+  <script src="lib/importer.js"></script>
+  <script src="lib/prompt.js"></script>
+  <script src="lib/markdown.js"></script>
+  <script src="lib/report-model.js"></script>
+  <script src="lib/correlation.js"></script>
+  <!--
+    Le moteur de dessin du rapport et sa composition en onglets (report/report-render.js,
+    report/report-sections.js), chargés dans l'ordre d'index.html — avant
+    lib/report-sections/*.js, à dessein : les deux se partagent le même global
+    `HA.reportSections`, et report/report-sections.js doit poser le sien en premier pour
+    que les fabriques de section (lib/report-sections/*.js, qui font `... || {}`) s'y
+    ajoutent au lieu de l'écraser. Sert aux tests de report-render.js plus bas.
+  -->
+  <script src="report/report-engine.js"></script>
+  <script src="report/report-charts-sleep.js"></script>
+  <script src="report/report-charts-heart.js"></script>
+  <script src="report/report-charts-activity.js"></script>
+  <script src="report/report-charts-vitals.js"></script>
+  <script src="report/report-sections.js"></script>
+  <script src="report/report-render.js"></script>
+  <script src="report/smoke-fixture.js"></script>
+  <script src="lib/report-sections/util.js"></script>
+  <script src="lib/report-sections/sleep.js"></script>
+  <script src="lib/report-sections/heart.js"></script>
+  <script src="lib/report-sections/activity.js"></script>
+  <script src="lib/report-sections/body.js"></script>
+  <script src="lib/report-sections/stress.js"></script>
+  <script src="lib/report-sections/breathing.js"></script>
+  <script src="lib/report-sections/tiles.js"></script>
+  <script src="lib/report-builder.js"></script>
+  <script src="lib/narrative.js"></script>
+  <script src="lib/report-export.js"></script>
+  <script src="lib/llm.js"></script>
+  <script src="report/chart-catalog.js"></script>
+  <script src="report/chart-spec.js"></script>
+  <script src="lib/chat.js"></script>
+  <script src="chat/chat-view.js"></script>
+  <script src="app-report.js"></script>
+  <script src="test/test.js"></script>
+</body>
+</html>
