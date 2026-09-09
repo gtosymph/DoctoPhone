@@ -47,6 +47,7 @@ import com.kmt.healthanalyzer.ui.components.ScreenHeader
 import com.kmt.healthanalyzer.ui.components.SectionLabel
 import com.kmt.healthanalyzer.ui.theme.HealthAnalyzerTheme
 import com.kmt.healthanalyzer.ui.theme.domainColors
+import java.io.File
 import kotlin.math.roundToInt
 
 private const val MIN_SLEEP_TARGET_MINUTES = 240
@@ -71,24 +72,34 @@ fun SettingsScreen(
     val updateState by updateViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    // Une fois l'APK téléchargé, ouvre l'installeur système sans attendre un second geste de
-    // l'utilisateur : « télécharger puis installer » est une seule action de son point de vue.
-    // Si l'autorisation d'installer manque, explique pourquoi avant de le renvoyer vers les
-    // réglages système, plutôt que d'échouer sans rien dire.
+    /**
+     * Ouvre l'installeur système pour l'APK téléchargé, ou renvoie vers les réglages quand
+     * l'autorisation d'installer manque.
+     *
+     * Appelée à deux endroits, et c'est le point important. Une première fois toute seule,
+     * dès que le téléchargement finit : « télécharger puis installer » est un seul geste du
+     * point de vue de l'utilisateur. Une seconde fois par le bouton « Installer » de la
+     * section, autant de fois qu'il le faut. Sans cette seconde voie, l'écran était une
+     * impasse : l'installation refusée par mégarde, ou l'autorisation accordée seulement
+     * après le message, laissaient un écran figé qui demandait de relancer une installation
+     * que rien ne permettait de relancer.
+     */
+    val launchInstall: (File) -> Unit = { apkFile ->
+        if (updateViewModel.canInstallPackages()) {
+            context.startActivity(updateViewModel.installIntentFor(apkFile))
+        } else {
+            Toast.makeText(
+                context,
+                "Autorisez l'installation d'apps depuis cette source, puis appuyez sur « Installer ».",
+                Toast.LENGTH_LONG,
+            ).show()
+            context.startActivity(updateViewModel.requestInstallPermissionIntent())
+        }
+    }
+
     LaunchedEffect(updateState.status) {
         val status = updateState.status
-        if (status is UpdateStatus.ReadyToInstall) {
-            if (updateViewModel.canInstallPackages()) {
-                context.startActivity(updateViewModel.installIntentFor(status.apkFile))
-            } else {
-                Toast.makeText(
-                    context,
-                    "Autorisez l'installation d'apps depuis cette source, puis relancez l'installation.",
-                    Toast.LENGTH_LONG,
-                ).show()
-                context.startActivity(updateViewModel.requestInstallPermissionIntent())
-            }
-        }
+        if (status is UpdateStatus.ReadyToInstall) launchInstall(status.apkFile)
     }
 
     SettingsContent(
@@ -103,6 +114,7 @@ fun SettingsScreen(
         onDismissMessage = viewModel::dismissMessage,
         onCheckUpdate = updateViewModel::checkNow,
         onDownloadAndInstallUpdate = updateViewModel::downloadAndInstall,
+        onInstallUpdate = launchInstall,
         modifier = modifier,
     )
 }
@@ -121,6 +133,7 @@ fun SettingsContent(
     onDismissMessage: () -> Unit,
     onCheckUpdate: () -> Unit,
     onDownloadAndInstallUpdate: () -> Unit,
+    onInstallUpdate: (File) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -216,6 +229,7 @@ fun SettingsContent(
                     accent = domain.vitality.base,
                     onCheckNow = onCheckUpdate,
                     onDownloadAndInstall = onDownloadAndInstallUpdate,
+                    onInstall = onInstallUpdate,
                 )
             }
         }
@@ -283,6 +297,7 @@ private fun SettingsContentPreview() {
             onDismissMessage = {},
             onCheckUpdate = {},
             onDownloadAndInstallUpdate = {},
+            onInstallUpdate = {},
         )
     }
 }

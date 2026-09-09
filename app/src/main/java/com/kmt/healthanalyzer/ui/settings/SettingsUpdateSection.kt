@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import java.io.File
 import kotlin.math.roundToInt
 
 /**
@@ -31,6 +32,7 @@ fun UpdateSection(
     accent: Color,
     onCheckNow: () -> Unit,
     onDownloadAndInstall: () -> Unit,
+    onInstall: (File) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors()) {
@@ -40,7 +42,12 @@ fun UpdateSection(
                 style = MaterialTheme.typography.bodyMedium,
             )
             UpdateStatusRow(state.status, accent)
-            UpdateActionRow(status = state.status, onCheckNow = onCheckNow, onDownloadAndInstall = onDownloadAndInstall)
+            UpdateActionRow(
+                status = state.status,
+                onCheckNow = onCheckNow,
+                onDownloadAndInstall = onDownloadAndInstall,
+                onInstall = onInstall,
+            )
         }
     }
 }
@@ -87,8 +94,12 @@ private fun UpdateStatusRow(status: UpdateStatus, accent: Color) {
             }
         }
 
+        // Ne dit pas « installation en cours » : l'app a seulement ouvert l'installeur
+        // système, et l'utilisateur peut l'avoir refusé, ou avoir dû accorder d'abord
+        // l'autorisation d'installer. Le texte décrit ce qui est certain — l'APK est là — et
+        // le bouton d'à côté permet de relancer autant de fois qu'il le faut.
         is UpdateStatus.ReadyToInstall -> Text(
-            "Téléchargement terminé, installation en cours…",
+            "Mise à jour téléchargée, prête à installer.",
             style = MaterialTheme.typography.bodyMedium,
             color = accent,
         )
@@ -102,7 +113,12 @@ private fun UpdateStatusRow(status: UpdateStatus, accent: Color) {
 }
 
 @Composable
-private fun UpdateActionRow(status: UpdateStatus, onCheckNow: () -> Unit, onDownloadAndInstall: () -> Unit) {
+private fun UpdateActionRow(
+    status: UpdateStatus,
+    onCheckNow: () -> Unit,
+    onDownloadAndInstall: () -> Unit,
+    onInstall: (File) -> Unit,
+) {
     when (status) {
         UpdateStatus.Idle, UpdateStatus.UpToDate, is UpdateStatus.Failed ->
             OutlinedButton(onClick = onCheckNow) { Text("Vérifier") }
@@ -110,6 +126,14 @@ private fun UpdateActionRow(status: UpdateStatus, onCheckNow: () -> Unit, onDown
         is UpdateStatus.Available ->
             Button(onClick = onDownloadAndInstall) { Text("Télécharger et installer") }
 
-        UpdateStatus.Checking, is UpdateStatus.Downloading, is UpdateStatus.ReadyToInstall -> Unit
+        // L'installeur système a déjà été ouvert une fois, automatiquement. Ce bouton existe
+        // pour tous les cas où cela n'a pas suffi : installation refusée par mégarde, ou
+        // autorisation « sources inconnues » accordée seulement après coup. Sans lui, l'écran
+        // était une impasse — le message demandait de relancer l'installation, et rien ne le
+        // permettait.
+        is UpdateStatus.ReadyToInstall ->
+            Button(onClick = { onInstall(status.apkFile) }) { Text("Installer") }
+
+        UpdateStatus.Checking, is UpdateStatus.Downloading -> Unit
     }
 }

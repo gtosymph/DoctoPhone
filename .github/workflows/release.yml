@@ -80,11 +80,20 @@ jobs:
           fi
 
       - name: Calculer le numéro et le nom de version
+        # Le versionCode est le numéro de run décalé (voir appVersionCodeOffset dans
+        # gradle.properties) : le compteur de runs repart de 1, ce qui entrait en collision
+        # avec les APK construits à la main avant cette action. Le nom reprend ce même
+        # numéro, pour qu'une version lue à l'écran désigne sans ambiguïté celle qui décide
+        # de la mise à jour.
         id: version
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
           base=$(grep '^appVersionBase=' gradle.properties | cut -d= -f2)
-          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
-          echo "name=${base}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          offset=$(grep '^appVersionCodeOffset=' gradle.properties | cut -d= -f2)
+          code=$((RUN_NUMBER + offset))
+          echo "code=${code}" >> "$GITHUB_OUTPUT"
+          echo "name=${base}.${code}" >> "$GITHUB_OUTPUT"
 
       - name: Décoder le keystore de publication
         env:
