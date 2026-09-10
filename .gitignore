@@ -43,3 +43,8 @@ com.samsung.*.json
 
 # --- Journaux de session ------------------------------------------------------
 .remember/
+
+# Espace de travail de l'outillage : copies isolées du dépôt, transcriptions de session.
+# Une copie isolée est elle-même un dépôt git ; indexée par mégarde, elle entre comme un
+# lien vide qui casse tout clone ultérieur du dépôt.
+.claude/
