@@ -6,6 +6,7 @@ import com.kmt.healthanalyzer.data.llm.LlmProvider
 import com.kmt.healthanalyzer.data.preferences.AppPreferences
 import com.kmt.healthanalyzer.data.repository.HealthRepository
 import com.kmt.healthanalyzer.data.settings.ApiKeyStore
+import com.kmt.healthanalyzer.data.work.HealthAnalyzerWorkScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,7 @@ data class SettingsUiState(
     val model: String = LlmProvider.ANTHROPIC.defaultModel,
     val sleepTargetMinutes: Int = 450,
     val providersWithKey: Set<LlmProvider> = emptySet(),
+    val autoChecksEnabled: Boolean = true,
     val message: String? = null,
 )
 
@@ -29,6 +31,7 @@ class SettingsViewModel @Inject constructor(
     private val preferences: AppPreferences,
     private val apiKeyStore: ApiKeyStore,
     private val repository: HealthRepository,
+    private val workScheduler: HealthAnalyzerWorkScheduler,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -44,6 +47,7 @@ class SettingsViewModel @Inject constructor(
                         model = settings.model,
                         sleepTargetMinutes = settings.sleepTargetMinutes,
                         providersWithKey = withKey,
+                        autoChecksEnabled = settings.autoChecksEnabled,
                     )
                 }
             }
@@ -83,6 +87,22 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             apiKeyStore.clearKey(provider)
             refreshKeys("La clé de ${provider.displayName} est effacée.")
+        }
+    }
+
+    /**
+     * Active ou coupe la synchronisation nocturne et le bilan hebdomadaire automatiques.
+     *
+     * La demande de la permission `POST_NOTIFICATIONS` (Android 13+) reste du ressort de
+     * l'écran — un `ViewModel` ne peut pas lancer de dialogue système — cette méthode ne
+     * fait que persister le choix et (des)programmer les tâches en conséquence, que la
+     * permission ait été accordée ou non : la synchronisation et l'affichage des dérives à
+     * l'écran ne dépendent pas des notifications.
+     */
+    fun setAutoChecksEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.setAutoChecksEnabled(enabled)
+            if (enabled) workScheduler.schedule() else workScheduler.cancel()
         }
     }
 

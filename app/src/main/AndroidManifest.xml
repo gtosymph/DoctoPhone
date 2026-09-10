@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Bilan hebdomadaire de dérives (Android 13+) : déclarée ET demandée à l'exécution
+         depuis les réglages (voir SettingsScreen). Une permission seulement déclarée ne
+         sert à rien — c'est le défaut déjà vécu avec READ_HEALTH_DATA_HISTORY. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Ouvre l'installeur système pour l'APK d'une mise à jour téléchargée par l'app. Aucune
          installation silencieuse : Android demande toujours confirmation à l'utilisateur. -->
@@ -82,6 +88,20 @@
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- HealthAnalyzerApp implémente Configuration.Provider (voir sa documentation) pour
+             fournir HiltWorkerFactory à WorkManager : l'initialisation automatique par défaut,
+             plus tôt dans le démarrage de l'app et sans injection Hilt, doit donc être coupée. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
         </provider>
     </application>
 </manifest>

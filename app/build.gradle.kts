@@ -145,6 +145,8 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
     implementation(libs.androidx.health.connect.client)
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.datastore.preferences)

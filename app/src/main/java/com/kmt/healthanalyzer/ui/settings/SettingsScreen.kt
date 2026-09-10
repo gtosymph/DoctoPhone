@@ -1,9 +1,15 @@
 package com.kmt.healthanalyzer.ui.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -22,6 +28,8 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -72,6 +80,24 @@ fun SettingsScreen(
     val updateState by updateViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    // Sur Android 13+, activer les bilans automatiques est le moment naturel pour demander
+    // POST_NOTIFICATIONS : c'est le geste qui en a besoin. Une permission refusée n'empêche
+    // pas d'activer le réglage — la synchronisation et les dérives à l'écran ne dépendent
+    // pas des notifications, seul l'envoi de la notification hebdomadaire sera silencieux.
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
+
+    val onToggleAutoChecks: (Boolean) -> Unit = { enabled ->
+        viewModel.setAutoChecksEnabled(enabled)
+        if (enabled &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     /**
      * Ouvre l'installeur système pour l'APK téléchargé, ou renvoie vers les réglages quand
      * l'autorisation d'installer manque.
@@ -110,6 +136,7 @@ fun SettingsScreen(
         onClearApiKey = viewModel::clearApiKey,
         onModelChanged = viewModel::setModel,
         onSleepTargetChanged = viewModel::setSleepTargetMinutes,
+        onAutoChecksEnabledChanged = onToggleAutoChecks,
         onClearAllData = viewModel::clearAllData,
         onDismissMessage = viewModel::dismissMessage,
         onCheckUpdate = updateViewModel::checkNow,
@@ -129,6 +156,7 @@ fun SettingsContent(
     onClearApiKey: (LlmProvider) -> Unit,
     onModelChanged: (String) -> Unit,
     onSleepTargetChanged: (Int) -> Unit,
+    onAutoChecksEnabledChanged: (Boolean) -> Unit,
     onClearAllData: () -> Unit,
     onDismissMessage: () -> Unit,
     onCheckUpdate: () -> Unit,
@@ -189,6 +217,38 @@ fun SettingsContent(
                             minutes = state.sleepTargetMinutes,
                             trackColor = domain.sleep.base,
                             onChanged = onSleepTargetChanged,
+                        )
+                    }
+                }
+            }
+
+            // --- Bilans automatiques ----------------------------------------------------
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SectionLabel(text = "Bilans automatiques", accent = domain.vitality.base)
+                Card(colors = CardDefaults.cardColors(containerColor = domain.vitality.soft)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Synchronisation nocturne et bilan hebdomadaire",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                "Reprend les mesures Health Connect chaque nuit et prévient par " +
+                                    "notification seulement si une mesure s'écarte durablement de " +
+                                    "vos habitudes.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = state.autoChecksEnabled,
+                            onCheckedChange = onAutoChecksEnabledChanged,
+                            colors = SwitchDefaults.colors(checkedThumbColor = domain.vitality.base),
                         )
                     }
                 }
@@ -293,6 +353,7 @@ private fun SettingsContentPreview() {
             onClearApiKey = {},
             onModelChanged = {},
             onSleepTargetChanged = {},
+            onAutoChecksEnabledChanged = {},
             onClearAllData = {},
             onDismissMessage = {},
             onCheckUpdate = {},

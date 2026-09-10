@@ -66,8 +66,13 @@ private const val REPORT_URL = "https://appassets.androidplatform.net/assets/rep
 
 /** Écran de rapport : point d'entrée qui relie [ReportViewModel] à [ReportContent]. */
 @Composable
-fun ReportScreen(modifier: Modifier = Modifier, viewModel: ReportViewModel = hiltViewModel()) {
+fun ReportScreen(
+    modifier: Modifier = Modifier,
+    viewModel: ReportViewModel = hiltViewModel(),
+    driftViewModel: DriftViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val driftState by driftViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // Événement à usage unique : ouvrir le sélecteur de partage dès que le fichier est prêt.
@@ -79,6 +84,7 @@ fun ReportScreen(modifier: Modifier = Modifier, viewModel: ReportViewModel = hil
 
     ReportContent(
         state = state,
+        driftState = driftState,
         onRangeSelected = viewModel::selectRange,
         onRefresh = viewModel::refresh,
         onExport = viewModel::export,
@@ -98,6 +104,7 @@ fun ReportScreen(modifier: Modifier = Modifier, viewModel: ReportViewModel = hil
 @Composable
 fun ReportContent(
     state: ReportUiState,
+    driftState: DriftUiState,
     onRangeSelected: (TimeRange) -> Unit,
     onRefresh: () -> Unit,
     onExport: () -> Unit,
@@ -162,6 +169,7 @@ fun ReportContent(
             )
             PeriodSelector(selected = state.range, onSelected = onRangeSelected)
             NarrativeRow(state = state, onWriteNarrative = onWriteNarrative)
+            DriftSection(state = driftState)
             AnimatedVisibility(state.errorMessage != null, enter = fadeIn(), exit = fadeOut()) {
                 state.errorMessage?.let { ErrorCard(it) }
             }
