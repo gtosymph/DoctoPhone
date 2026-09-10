@@ -14,8 +14,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.Instant
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import javax.inject.Inject
 
 data class ImportUiState(
@@ -76,18 +77,28 @@ class ImportViewModel @Inject constructor(
         }
     }
 
-    /** Reprend dans Health Connect ce qui suit le dernier jour déjà en base. */
+    /**
+     * Met la base à jour depuis Health Connect.
+     *
+     * Deux chemins, et la distinction compte. Quand la base porte déjà des mesures, on reprend
+     * simplement après le dernier jour connu : c'est court et fréquent. Quand elle est vide,
+     * on va chercher **tout l'historique disponible**.
+     *
+     * Ce second cas corrige un défaut réel signalé sur l'appareil de l'utilisateur : la
+     * première synchronisation ne demandait que 30 jours, en dur. Il choisissait « 1 an » dans
+     * le rapport et n'y voyait qu'un mois. Le rapport lit la base locale — une base courte ne
+     * peut pas produire un rapport long, quelle que soit la période choisie à l'écran.
+     */
     fun syncHealthConnect() {
         viewModelScope.launch {
             _state.update { it.copy(isSyncing = true, syncMessage = null, syncHasIssue = false) }
             try {
-                val from = repository.lastRecordedDay()
-                    ?.plusDays(1)
-                    ?.atStartOfDay(zone)
-                    ?.toInstant()
-                    ?: Instant.now().minusSeconds(DEFAULT_SYNC_WINDOW_SECONDS)
-
-                val result = repository.syncFromHealthConnect(from)
+                val lastDay = repository.lastRecordedDay()
+                val result = if (lastDay == null) {
+                    fullHistorySync()
+                } else {
+                    repository.syncFromHealthConnect(lastDay.plusDays(1).atStartOfDay(zone).toInstant())
+                }
                 _state.update {
                     it.copy(
                         isSyncing = false,
@@ -107,12 +118,56 @@ class ImportViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Redemande tout l'historique, même quand la base porte déjà des mesures.
+     *
+     * Utile après avoir accordé la permission d'historique : les permissions Health Connect ne
+     * se demandent qu'une fois, et quelqu'un qui avait autorisé l'app avant l'existence de
+     * cette permission ne l'a jamais accordée. Sa base reste alors courte, et rien à l'écran
+     * ne lui dit qu'un second geste la remplirait.
+     */
+    fun syncAllHealthConnect() {
+        viewModelScope.launch {
+            _state.update { it.copy(isSyncing = true, syncMessage = null, syncHasIssue = false) }
+            try {
+                val result = fullHistorySync()
+                _state.update {
+                    it.copy(
+                        isSyncing = false,
+                        syncMessage = result.toUserMessage(),
+                        syncHasIssue = result.hasIssue,
+                    )
+                }
+            } catch (failure: Exception) {
+                _state.update {
+                    it.copy(
+                        isSyncing = false,
+                        syncMessage = "La récupération de l'historique a échoué : " +
+                            (failure.message ?: "cause inconnue"),
+                        syncHasIssue = true,
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Lance la marche arrière par tranches et montre où elle en est.
+     *
+     * L'avancement n'est pas cosmétique : remonter plusieurs années prend du temps, et un
+     * écran figé sans un mot ressemble à une panne. Montrer le mois en cours de lecture dit à
+     * la fois que le travail avance et jusqu'où il est descendu.
+     */
+    private suspend fun fullHistorySync() = repository.syncAllFromHealthConnect { day ->
+        _state.update { it.copy(syncMessage = "Récupération de l'historique… ${MONTH_FORMAT.format(day)}") }
+    }
+
     fun refreshHealthConnectStatus() {
         _state.update { it.copy(healthConnectStatus = availabilityChecker.status()) }
     }
 
     private companion object {
-        /** Sans donnée locale, la première synchronisation remonte à 30 jours. */
-        const val DEFAULT_SYNC_WINDOW_SECONDS = 30L * 24 * 3600
+        /** Mois de la tranche en cours de lecture, montré pendant la marche arrière. */
+        val MONTH_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.FRANCE)
     }
 }

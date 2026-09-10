@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -40,6 +41,7 @@ fun HealthConnectSection(
     syncHasIssue: Boolean = false,
     onRequestPermissions: () -> Unit,
     onSync: () -> Unit,
+    onSyncAll: () -> Unit,
 ) {
     val context = LocalContext.current
     val vitality = HealthAnalyzerTheme.domainColors.vitality
@@ -68,6 +70,16 @@ fun HealthConnectSection(
                     Button(onClick = onRequestPermissions) { Text("Autoriser l'accès") }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Button(onClick = onSync, enabled = !isSyncing) { Text("Synchroniser") }
+                        // Redemander tout l'historique reste un geste à part, et volontairement
+                        // secondaire : il remonte plusieurs années par tranches, donc il dure.
+                        // Il sert surtout après un octroi tardif de la permission d'historique,
+                        // que Health Connect ne réclame jamais d'elle-même à qui avait déjà
+                        // autorisé l'app.
+                        TextButton(
+                            onClick = onSyncAll,
+                            enabled = !isSyncing,
+                            modifier = Modifier.padding(start = 8.dp),
+                        ) { Text("Tout l'historique") }
                         if (isSyncing) {
                             CircularProgressIndicator(
                                 modifier = Modifier

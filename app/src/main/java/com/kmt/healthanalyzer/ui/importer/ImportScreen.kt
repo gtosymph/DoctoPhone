@@ -74,6 +74,7 @@ fun ImportScreen(modifier: Modifier = Modifier, viewModel: ImportViewModel = hil
         onPickArchive = { archiveLauncher.launch(ARCHIVE_MIME_TYPES) },
         onRequestHealthConnectPermissions = { permissionLauncher.launch(HealthConnectPermissions.REQUESTED_PERMISSIONS) },
         onSyncHealthConnect = viewModel::syncHealthConnect,
+        onSyncAllHealthConnect = viewModel::syncAllHealthConnect,
         modifier = modifier,
     )
 }
@@ -88,6 +89,7 @@ fun ImportContent(
     onPickArchive: () -> Unit,
     onRequestHealthConnectPermissions: () -> Unit,
     onSyncHealthConnect: () -> Unit,
+    onSyncAllHealthConnect: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val domain = HealthAnalyzerTheme.domainColors
@@ -173,6 +175,7 @@ fun ImportContent(
             syncHasIssue = state.syncHasIssue,
             onRequestPermissions = onRequestHealthConnectPermissions,
             onSync = onSyncHealthConnect,
+            onSyncAll = onSyncAllHealthConnect,
         )
     }
 }
@@ -246,6 +249,7 @@ private fun ImportContentPreview() {
         onPickArchive = {},
             onRequestHealthConnectPermissions = {},
             onSyncHealthConnect = {},
+            onSyncAllHealthConnect = {},
         )
     }
 }
@@ -265,6 +269,7 @@ private fun ImportContentImportingPreview() {
         onPickArchive = {},
             onRequestHealthConnectPermissions = {},
             onSyncHealthConnect = {},
+            onSyncAllHealthConnect = {},
         )
     }
 }

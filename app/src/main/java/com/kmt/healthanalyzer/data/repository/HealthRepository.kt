@@ -108,6 +108,107 @@ class HealthRepository @Inject constructor(
      */
     suspend fun syncFromHealthConnect(from: Instant, to: Instant = Instant.now()): HealthConnectSyncResult =
         withContext(Dispatchers.IO) {
+            val outcome = readAndStoreRange(from, to)
+            outcome.toResult(oldestRequested = from, now = to)
+        }
+
+    /**
+     * Récupère tout l'historique que Health Connect accepte de donner, par tranches.
+     *
+     * Existe à cause d'un défaut réel : la première synchronisation d'une base vide ne
+     * demandait que 30 jours, en dur. L'utilisateur choisissait « 1 an » dans le rapport et n'y
+     * voyait qu'un mois, sans comprendre pourquoi — le rapport lit la base locale, et une base
+     * courte ne peut pas produire un rapport long. La permission
+     * `READ_HEALTH_DATA_HISTORY` autorise Health Connect à *donner* plus de 30 jours ; encore
+     * faut-il les lui *demander*.
+     *
+     * Trois choix de mise en œuvre méritent une explication.
+     *
+     * **Par tranches, et pas en une requête.** Plusieurs années de mesures cardiaques ne
+     * tiennent pas confortablement en mémoire d'un seul tenant. Chaque tranche est lue puis
+     * écrite avant de passer à la suivante : une tranche acquise reste acquise même si la
+     * suivante échoue.
+     *
+     * **On remonte jusqu'au silence, pas jusqu'à une date fixe.** La marche arrière s'arrête
+     * après [MAX_EMPTY_CHUNKS] tranches vides d'affilée. Le seuil est large exprès : une
+     * montre en panne ou un téléphone changé laissent des trous de plusieurs mois, et
+     * s'arrêter au premier vide amputerait l'historique juste avant la partie intéressante.
+     * [MAX_HISTORY_CHUNKS] borne le pire cas.
+     *
+     * **On renonce tout de suite sans permission.** Lire des dizaines de tranches quand aucune
+     * permission n'est accordée ne peut rien donner, et l'écran a déjà de quoi l'expliquer.
+     */
+    suspend fun syncAllFromHealthConnect(
+        to: Instant = Instant.now(),
+        onChunk: (LocalDate) -> Unit = {},
+    ): HealthConnectSyncResult = withContext(Dispatchers.IO) {
+        val deepestStart = to.minus(CHUNK_DAYS * MAX_HISTORY_CHUNKS, ChronoUnit.DAYS)
+
+        var chunkEnd = to
+        var consecutiveEmptyChunks = 0
+        var lastOutcome: RangeOutcome? = null
+        val allDates = mutableListOf<LocalDate>()
+
+        while (chunkEnd.isAfter(deepestStart)) {
+            val chunkStart = maxOf(chunkEnd.minus(CHUNK_DAYS, ChronoUnit.DAYS), deepestStart)
+            onChunk(chunkStart.atZone(zone).toLocalDate())
+
+            val outcome = readAndStoreRange(chunkStart, chunkEnd)
+            lastOutcome = outcome
+
+            if (!outcome.permissionState.hasAnyDataPermission) break
+
+            if (outcome.receivedDates.isEmpty()) {
+                consecutiveEmptyChunks += 1
+                if (consecutiveEmptyChunks >= MAX_EMPTY_CHUNKS) break
+            } else {
+                consecutiveEmptyChunks = 0
+                allDates += outcome.receivedDates
+            }
+
+            // Sans permission d'historique, Health Connect ne rendra rien au-delà de sa fenêtre
+            // de 30 jours : continuer à creuser ne ferait que des requêtes vides. On s'arrête,
+            // mais le résultat signale quand même le manque — voir `oldestRequested` ci-dessous.
+            if (!outcome.permissionState.hasHistoryPermission &&
+                chunkStart.isBefore(to.minus(HEALTH_CONNECT_HISTORY_WINDOW_DAYS, ChronoUnit.DAYS))
+            ) {
+                break
+            }
+
+            chunkEnd = chunkStart
+        }
+
+        val permissionState = lastOutcome?.permissionState ?: healthConnectReader.get().permissionState()
+        RangeOutcome(permissionState, allDates).toResult(
+            // La profondeur *voulue*, pas celle réellement atteinte : c'est elle qui dit si la
+            // permission d'historique a manqué. Passer la borne atteinte ferait taire
+            // l'avertissement précisément quand on s'est arrêté à cause de cette permission.
+            oldestRequested = deepestStart,
+            now = to,
+        )
+    }
+
+    /** Ce qu'une tranche a rendu : la photographie de permissions, et les dates reçues. */
+    private data class RangeOutcome(
+        val permissionState: com.kmt.healthanalyzer.data.healthconnect.HealthConnectPermissionState,
+        val receivedDates: List<LocalDate>,
+    )
+
+    private fun RangeOutcome.toResult(oldestRequested: Instant, now: Instant) = HealthConnectSyncResult(
+        hasAnyDataPermission = permissionState.hasAnyDataPermission,
+        missingDataPermissions = permissionState.missingDataPermissions,
+        historyPermissionMissing = isHistoryPermissionMissing(
+            permissionState.hasHistoryPermission,
+            oldestRequested,
+            now,
+        ),
+        earliestDate = receivedDates.minOrNull(),
+        latestDate = receivedDates.maxOrNull(),
+    )
+
+    /** Lit une tranche, l'écrit en base, et rend ce qu'elle a donné. */
+    private suspend fun readAndStoreRange(from: Instant, to: Instant): RangeOutcome =
+        withContext(Dispatchers.IO) {
             val reader = healthConnectReader.get()
             val permissionState = reader.permissionState()
 
@@ -141,13 +242,7 @@ class HealthRepository @Inject constructor(
                 hrv.forEach { add(it.time.atZone(zone).toLocalDate()) }
             }
 
-            HealthConnectSyncResult(
-                hasAnyDataPermission = permissionState.hasAnyDataPermission,
-                missingDataPermissions = permissionState.missingDataPermissions,
-                historyPermissionMissing = isHistoryPermissionMissing(permissionState.hasHistoryPermission, from),
-                earliestDate = receivedDates.minOrNull(),
-                latestDate = receivedDates.maxOrNull(),
-            )
+            RangeOutcome(permissionState, receivedDates)
         }
 
     /** Construit la vue consolidée de la période demandée. */
@@ -253,5 +348,29 @@ class HealthRepository @Inject constructor(
     private companion object {
         const val CACHE_PREFIX = "samsung-export"
         const val CACHE_SUFFIX = ".zip"
+
+        /**
+         * Largeur d'une tranche de lecture, en jours. Assez large pour que la marche arrière
+         * ne coûte pas des centaines de requêtes, assez étroite pour qu'une tranche de mesures
+         * cardiaques tienne en mémoire.
+         */
+        const val CHUNK_DAYS = 30L
+
+        /**
+         * Nombre de tranches vides consécutives après lequel la marche arrière renonce.
+         *
+         * Volontairement large. Une montre en panne, un téléphone changé ou un long voyage
+         * laissent des trous de plusieurs mois ; s'arrêter au premier vide amputerait
+         * l'historique juste avant la partie intéressante. Six tranches valent environ six
+         * mois de silence.
+         */
+        const val MAX_EMPTY_CHUNKS = 6
+
+        /**
+         * Plafond de profondeur, en tranches. Health Connect ne garde pas indéfiniment, et une
+         * borne dure évite qu'un défaut de comptage ne transforme la synchronisation en boucle
+         * sans fin. Soixante tranches valent environ cinq ans.
+         */
+        const val MAX_HISTORY_CHUNKS = 60L
     }
 }
