@@ -137,6 +137,35 @@ Avant d'ajouter un motif de fichier au dépôt, la question à se poser n'est pa
 utile ? » mais « d'où viennent ces octets ? ». Le seul jeu de données versionné est
 `shared-fixtures/parity-input.json`, entièrement synthétique et documenté comme tel.
 
+### Une suite verte ne dit rien du démarrage
+
+**Lancer l'app fait partie de la vérification, au même titre que les tests.** Pas « quand
+c'est pratique » : avant chaque publication.
+
+```bash
+adb install -r app/build/outputs/apk/release/app-release.apk
+adb logcat -c && adb shell am start -n com.kmt.healthanalyzer/.MainActivity
+sleep 8 && adb logcat -d -b crash | grep FATAL   # doit ne rien rendre
+adb shell pidof com.kmt.healthanalyzer           # doit rendre un PID
+```
+
+La raison est un plantage réel. Une contrainte de tâche de fond interdite par Android —
+`setRequiresDeviceIdle(true)` avec `setBackoffCriteria(...)` — n'est refusée ni à la
+compilation ni par un test JVM, mais à la mise en file :
+
+    java.lang.IllegalArgumentException: Cannot set backoff criteria on an idle mode job
+
+La programmation partant du démarrage de l'app, l'app se fermait à l'ouverture. **450 tests
+verts, `assembleDebug` et `lintDebug` réussis n'ont rien vu**, et pour une raison simple :
+aucun d'eux ne démarre l'app.
+
+Ce qu'une suite de tests JVM ne couvre pas, sur ce projet : le démarrage, l'injection Hilt
+réelle, les contraintes `JobScheduler`, les permissions à l'exécution, R8 et les règles
+ProGuard (voir la section précédente), le `FileProvider`, et l'installeur système.
+
+Corollaire pour tout travail délégué : un compte rendu qui dit « X tests, 0 échec » décrit
+ce que les tests couvrent, pas ce que l'app fait. Les deux se vérifient séparément.
+
 ### Confidentialité
 `HealthPromptBuilder` est la seule porte de sortie des données vers un tiers. Il n'envoie
 que des **agrégats** : moyennes hebdomadaires et mensuelles, profils par jour de semaine

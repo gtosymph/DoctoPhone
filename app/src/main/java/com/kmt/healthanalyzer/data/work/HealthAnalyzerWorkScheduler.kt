@@ -44,16 +44,33 @@ class HealthAnalyzerWorkScheduler @Inject constructor(@ApplicationContext privat
      * batterie pas faible, appareil au repos — pour qu'elle ne se voie jamais : Health
      * Connect est une lecture locale, sans réseau, donc aucune contrainte de connexion.
      */
-    private fun syncRequest(): PeriodicWorkRequest {
-        val constraints = Constraints.Builder()
-            .setRequiresBatteryNotLow(true)
-            .setRequiresDeviceIdle(true)
-            .build()
-        return PeriodicWorkRequestBuilder<HealthSyncWorker>(1, TimeUnit.DAYS)
-            .setConstraints(constraints)
+    private fun syncRequest(): PeriodicWorkRequest =
+        PeriodicWorkRequestBuilder<HealthSyncWorker>(1, TimeUnit.DAYS)
+            .setConstraints(syncConstraints())
             .setBackoffCriteria(BackoffPolicy.LINEAR, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
             .build()
-    }
+
+    /**
+     * Contraintes de la synchronisation de nuit.
+     *
+     * **Ne remets jamais `setRequiresDeviceIdle(true)` ici.** Android interdit de combiner le
+     * mode « appareil au repos » et une politique de reprise, et le refus n'arrive pas à la
+     * compilation mais à la mise en file :
+     *
+     *     java.lang.IllegalArgumentException: Cannot set backoff criteria on an idle mode job
+     *
+     * Comme la programmation part du démarrage de l'app, l'exception fermait l'app à
+     * l'ouverture, avant tout écran. C'est arrivé en vrai, sur l'appareil de l'utilisateur.
+     *
+     * Entre les deux, la reprise vaut mieux que le repos de l'appareil. Sans reprise, une
+     * synchronisation qui échoue est perdue jusqu'au lendemain. Et « appareil au repos » est
+     * une contrainte sévère : sur un téléphone utilisé dans la journée, elle peut retarder la
+     * tâche de plusieurs jours. La lecture de Health Connect est locale et brève — elle n'a
+     * pas besoin que le téléphone dorme.
+     */
+    internal fun syncConstraints(): Constraints = Constraints.Builder()
+        .setRequiresBatteryNotLow(true)
+        .build()
 
     /**
      * Bilan hebdomadaire : pas de contrainte de repos de l'appareil — contrairement à la
