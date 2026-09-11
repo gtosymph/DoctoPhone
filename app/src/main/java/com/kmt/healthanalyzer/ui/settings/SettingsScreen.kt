@@ -72,6 +72,7 @@ private const val SLEEP_TARGET_STEP_MINUTES = 15
  */
 @Composable
 fun SettingsScreen(
+    onOpenImport: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
     updateViewModel: UpdateViewModel = hiltViewModel(),
@@ -131,6 +132,7 @@ fun SettingsScreen(
     SettingsContent(
         state = state,
         updateState = updateState,
+        onOpenImport = onOpenImport,
         onSelectProvider = viewModel::selectProvider,
         onSaveApiKey = viewModel::saveApiKey,
         onClearApiKey = viewModel::clearApiKey,
@@ -151,6 +153,7 @@ fun SettingsScreen(
 fun SettingsContent(
     state: SettingsUiState,
     updateState: UpdateUiState,
+    onOpenImport: () -> Unit,
     onSelectProvider: (LlmProvider) -> Unit,
     onSaveApiKey: (LlmProvider, String) -> Unit,
     onClearApiKey: (LlmProvider) -> Unit,
@@ -254,6 +257,24 @@ fun SettingsContent(
                 }
             }
 
+            // --- Import : l'onglet a disparu de la barre, le chemin reste ------------
+            // On importe son export Samsung Health une ou deux fois dans la vie de l'app ;
+            // Health Connect prend le relais chaque nuit. Le geste ne méritait pas un quart
+            // de la barre de navigation à demeure, mais il doit rester trouvable.
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SectionLabel(text = "Import", accent = domain.activity.base)
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "Importer une archive Samsung Health, ou connecter Health Connect.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedButton(onClick = onOpenImport) { Text("Ouvrir l'import") }
+                    }
+                }
+            }
+
             // --- Données : zone à conséquence, signalée par le rouge de « cœur » -------
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SectionLabel(text = "Données", accent = domain.heart.base)
@@ -348,6 +369,7 @@ private fun SettingsContentPreview() {
         SettingsContent(
             state = SettingsUiState(providersWithKey = setOf(LlmProvider.ANTHROPIC)),
             updateState = UpdateUiState(),
+            onOpenImport = {},
             onSelectProvider = {},
             onSaveApiKey = { _, _ -> },
             onClearApiKey = {},

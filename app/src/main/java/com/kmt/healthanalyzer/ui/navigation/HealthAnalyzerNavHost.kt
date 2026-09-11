@@ -7,9 +7,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Insights
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -21,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -30,6 +30,7 @@ import com.kmt.healthanalyzer.ui.importer.ImportScreen
 import com.kmt.healthanalyzer.ui.report.ReportScreen
 import com.kmt.healthanalyzer.ui.settings.SettingsScreen
 import com.kmt.healthanalyzer.ui.settings.UpdateViewModel
+import com.kmt.healthanalyzer.ui.week.WeekScreen
 
 /**
  * Durée de la traversée entre onglets : assez courte pour rester rapide, assez longue pour
@@ -37,15 +38,27 @@ import com.kmt.healthanalyzer.ui.settings.UpdateViewModel
  */
 private const val TAB_TRANSITION_MILLIS = 180
 
-/** Une destination de la barre de navigation principale. */
+/**
+ * Une destination de la barre de navigation principale.
+ *
+ * **Trois onglets, et c'est une décision.** L'import en occupait un quatrième alors qu'on
+ * l'utilise une ou deux fois dans la vie de l'app : Health Connect se synchronise ensuite
+ * tout seul, chaque nuit. Les réglages ne s'ouvrent guère plus souvent. Les deux gardent
+ * leur route — rien n'est devenu inaccessible — mais ils se rejoignent depuis l'en-tête de
+ * l'accueil et depuis le bandeau de premier usage, pas depuis une place permanente dans la
+ * barre.
+ */
 private enum class HealthDestination(val route: String, val label: String) {
-    HOME("accueil", "Rapport"),
-    IMPORT("import", "Import"),
+    WEEK("semaine", "Cette semaine"),
+    REPORT("rapport", "Rapport"),
     ANALYSIS("analyse", "Analyse"),
-    SETTINGS("reglages", "Réglages"),
 }
 
-/** Coquille de navigation : une barre Material 3 à quatre onglets, l'accueil au démarrage. */
+/** Routes atteignables sans onglet : elles ne servent qu'à certains moments. */
+private const val ROUTE_SETTINGS = "reglages"
+private const val ROUTE_IMPORT = "import"
+
+/** Coquille de navigation : trois onglets, « Cette semaine » au démarrage. */
 @Composable
 fun HealthAnalyzerNavHost() {
     val navController = rememberNavController()
@@ -66,13 +79,7 @@ fun HealthAnalyzerNavHost() {
                     val selected = currentRoute?.hierarchy?.any { it.route == destination.route } == true
                     NavigationBarItem(
                         selected = selected,
-                        onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
+                        onClick = { navController.switchTo(destination.route) },
                         // `contentDescription` reste nul : le libellé visible ci-dessous porte déjà
                         // le nom de l'onglet, TalkBack fusionne les deux — le doubler l'annoncerait deux fois.
                         icon = { Icon(destination.icon(), contentDescription = null) },
@@ -85,7 +92,7 @@ fun HealthAnalyzerNavHost() {
         val screenModifier = Modifier.padding(innerPadding)
         NavHost(
             navController = navController,
-            startDestination = HealthDestination.HOME.route,
+            startDestination = HealthDestination.WEEK.route,
             // Une traversée sobre entre onglets : un fondu-glissé bref, jamais un saut brut
             // ni une animation assez longue pour ralentir la navigation.
             enterTransition = {
@@ -99,32 +106,50 @@ fun HealthAnalyzerNavHost() {
             },
             popExitTransition = { fadeOut(tween(TAB_TRANSITION_MILLIS)) },
         ) {
-            composable(HealthDestination.HOME.route) {
-                ReportScreen(modifier = screenModifier)
+            composable(HealthDestination.WEEK.route) {
+                WeekScreen(
+                    modifier = screenModifier,
+                    onOpenReport = { navController.switchTo(HealthDestination.REPORT.route) },
+                    onOpenSettings = { navController.switchTo(ROUTE_SETTINGS) },
+                    onOpenImport = { navController.switchTo(ROUTE_IMPORT) },
+                )
             }
-            composable(HealthDestination.IMPORT.route) { ImportScreen(modifier = screenModifier) }
+            composable(HealthDestination.REPORT.route) { ReportScreen(modifier = screenModifier) }
             composable(HealthDestination.ANALYSIS.route) {
                 AnalysisScreen(
                     modifier = screenModifier,
-                    onOpenSettings = {
-                        navController.navigate(HealthDestination.SETTINGS.route) {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
+                    onOpenSettings = { navController.switchTo(ROUTE_SETTINGS) },
                 )
             }
-            composable(HealthDestination.SETTINGS.route) {
-                SettingsScreen(modifier = screenModifier, updateViewModel = updateViewModel)
+            composable(ROUTE_SETTINGS) {
+                SettingsScreen(
+                    modifier = screenModifier,
+                    updateViewModel = updateViewModel,
+                    onOpenImport = { navController.switchTo(ROUTE_IMPORT) },
+                )
             }
+            composable(ROUTE_IMPORT) { ImportScreen(modifier = screenModifier) }
         }
     }
 }
 
+/**
+ * Bascule vers une destination sans empiler l'historique.
+ *
+ * `saveState` et `restoreState` gardent la position de défilement et l'état de chaque écran
+ * quitté : revenir sur le rapport après un détour par les réglages ne doit pas le
+ * reconstruire ni le ramener en haut.
+ */
+private fun NavHostController.switchTo(route: String) {
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
 private fun HealthDestination.icon() = when (this) {
-    HealthDestination.HOME -> Icons.Default.Insights
-    HealthDestination.IMPORT -> Icons.Default.FileDownload
+    HealthDestination.WEEK -> Icons.Default.CalendarToday
+    HealthDestination.REPORT -> Icons.Default.Insights
     HealthDestination.ANALYSIS -> Icons.Default.AutoAwesome
-    HealthDestination.SETTINGS -> Icons.Default.Settings
 }
