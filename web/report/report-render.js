@@ -149,6 +149,53 @@
     host.appendChild(grid);
   }
 
+
+
+  /*
+   * Les blocs de détail à ouvrir avant impression.
+   *
+   * Un écouteur par bloc poserait une fuite : `renderReport` vide et reconstruit le
+   * document à chaque changement de période, de thème ou de disposition, mais un
+   * `addEventListener` posé sur `window` survit à la destruction du nœud qu'il capture.
+   * Quatre changements de période, et la page traîne quatre générations de blocs détachés.
+   *
+   * Un seul écouteur, posé une fois, parcourt une liste que chaque rendu réinitialise.
+   */
+  let printHandlers = [];
+
+  function runPrintHandlers() {
+    for (const handler of printHandlers) {
+      try {
+        handler();
+      } catch (error) {
+        if (global.console) global.console.error('[rapport] préparation de l\'impression', error);
+      }
+    }
+  }
+
+  if (global.addEventListener) global.addEventListener('beforeprint', runPrintHandlers);
+  if (global.matchMedia) {
+    const printMedia = global.matchMedia('print');
+    if (printMedia.addEventListener) {
+      printMedia.addEventListener('change', function (event) { if (event.matches) runPrintHandlers(); });
+    }
+  }
+
+  /** Combien d'indicateurs passent en gros, en tête de section. */
+  const LEAD_KPI_COUNT = 2;
+
+  /** Une rangée d'indicateurs : la valeur en gros, le libellé en dessous. */
+  function renderKpiRow(items, className) {
+    const wrap = el('div', className);
+    for (const k of items) {
+      const item = el('div', 'ha-kpi');
+      item.appendChild(el('span', 'ha-n', k.value));
+      item.appendChild(el('span', 'ha-l', k.label));
+      wrap.appendChild(item);
+    }
+    return wrap;
+  }
+
   /** Une carte : titre, note, puis le graphique ou le contenu propre à la carte. */
   function renderCard(card, model) {
     const node = el('div', 'ha-card' + (card.span ? ' ha-span2' : ''));
@@ -181,7 +228,7 @@
   /**
    * Les cartes d'une section, regroupées par cadence (jour par jour, mois par mois,
    * profils, mesures ponctuelles). Un intertitre court précède chaque groupe — mais
-   * seulement quand la section en compte plus d'un, sinon il ne ferait que répéter le
+   * seulement quand le bloc en compte plus d'un, sinon il ne ferait que répéter le
    * titre de la section qui le précède déjà.
    */
   function renderCardGroups(host, cards, model) {
@@ -197,6 +244,98 @@
       }
       host.appendChild(grid);
     }
+  }
+
+  /**
+   * Une carte vide-t-elle sa section ? Les tableaux de tension et d'ECG sont vides chez la
+   * plupart des gens ; ils partent au détail tant qu'ils ne portent aucune ligne, et
+   * remontent tout seuls dès qu'ils en portent une.
+   */
+  function cardHasContent(card, model) {
+    if (!card.hasContent) return true;
+    try {
+      return card.hasContent(model);
+    } catch (error) {
+      if (global.console) global.console.error('[rapport] hasContent ' + card.title, error);
+      return true;
+    }
+  }
+
+  /**
+   * Les cartes d'une section : l'essentiel visible, le reste replié.
+   *
+   * Le critère de tri est explicite et tient en une phrase : **une carte est essentielle
+   * quand elle montre une série quotidienne sur toute la période**. Les profils — par heure,
+   * par jour de semaine — et les agrégats mensuels répondent à une question qu'on se pose
+   * ensuite, pas d'abord. Rien ne disparaît : le dépliage rend la section entière.
+   *
+   * Le bloc replié n'est pas un `<details>`. Le contenu d'un `<details>` fermé ne s'imprime
+   * pas, et le rapport imprimé doit être complet — c'est même son usage principal, chez le
+   * médecin. Une classe et un bouton permettent de le forcer ouvert à l'impression, ce
+   * qu'aucune règle CSS ne sait faire sur un `<details>`.
+   */
+  function renderCards(host, cards, model) {
+    const usable = cards.filter(c => cardHasContent(c, model));
+    const essential = usable.filter(c => c.essential);
+    const detail = usable.filter(c => !c.essential);
+
+    // Sans carte marquée essentielle, tout reste visible : mieux vaut une section trop
+    // longue qu'une section entièrement cachée derrière un bouton.
+    if (!essential.length) {
+      renderCardGroups(host, usable, model);
+      return;
+    }
+
+    renderCardGroups(host, essential, model);
+    if (!detail.length) return;
+
+    const wrap = el('div', 'ha-detail');
+    const body = el('div', 'ha-detail-body');
+    body.hidden = true;
+
+    /*
+     * Les cartes du détail sont dessinées à la PREMIÈRE ouverture, jamais avant.
+     *
+     * Un SVG construit dans un conteneur masqué n'a aucune largeur à mesurer : il sortait
+     * à zéro pixel, et le bloc s'ouvrait sur trois graphiques invisibles. Appeler `redraw()`
+     * après coup ne réglait rien et ajoutait un défaut : `redraw()` reconstruit le rapport
+     * entier, donc le bloc se refermait dans la foulée.
+     *
+     * Le dessin différé règle les deux d'un coup, et allège le chargement : sur un rapport
+     * de six sections, une bonne moitié des graphiques n'est jamais tracée si personne ne
+     * déplie.
+     */
+    let drawn = false;
+    const label = 'Voir le détail (' + detail.length + ')';
+    const button = el('button', 'ha-detail-toggle', label);
+    button.type = 'button';
+    button.setAttribute('aria-expanded', 'false');
+    button.addEventListener('click', function () {
+      const open = body.hidden;
+      if (open && !drawn) {
+        renderCardGroups(body, detail, model);
+        drawn = true;
+      }
+      body.hidden = !open;
+      button.setAttribute('aria-expanded', String(open));
+      button.textContent = open ? 'Masquer le détail' : label;
+    });
+
+    /*
+     * L'impression est le seul cas où le bloc doit sortir sans qu'on ait cliqué. La règle
+     * CSS le rend visible ; encore faut-il qu'il ait un contenu à rendre. Le bloc s'inscrit
+     * dans `printHandlers`, dont un unique écouteur de page se charge — voir son
+     * commentaire pour la raison.
+     */
+    printHandlers.push(function () {
+      if (drawn) return;
+      renderCardGroups(body, detail, model);
+      drawn = true;
+    });
+
+    wrap.appendChild(button);
+    wrap.appendChild(body);
+    host.appendChild(wrap);
   }
 
   /** Une section : en-tête coloré par domaine, verdict, indicateurs, cartes groupées, points du LLM. */
@@ -216,19 +355,23 @@
       node.appendChild(el('p', 'ha-sec-verdict', narrative.verdict));
     }
 
+    // Deux chiffres de tête, puis les autres en second rang. Les indicateurs sans valeur
+    // sont écartés d'abord, donc un chiffre de tête absent laisse le suivant prendre sa
+    // place plutôt que de laisser un trou en haut de la section.
     const kpis = (section.kpis ? section.kpis(model) : []).filter(k => k.value !== '—');
     if (kpis.length) {
-      const wrap = el('div', 'ha-kpis');
-      for (const k of kpis) {
-        const item = el('div', 'ha-kpi');
-        item.appendChild(el('span', 'ha-n', k.value));
-        item.appendChild(el('span', 'ha-l', k.label));
-        wrap.appendChild(item);
-      }
-      node.appendChild(wrap);
+      const lead = kpis.slice(0, LEAD_KPI_COUNT);
+      const rest = kpis.slice(LEAD_KPI_COUNT);
+      if (lead.length) node.appendChild(renderKpiRow(lead, 'ha-kpis ha-kpis-lead'));
+      if (rest.length) node.appendChild(renderKpiRow(rest, 'ha-kpis'));
     }
 
-    renderCardGroups(node, section.cards, model);
+    // La phrase de lecture : ce que VOS données montrent, calculé ici, jamais écrit par le
+    // LLM et jamais montré au LLM. Voir `report-sections.js`.
+    const insight = section.insight ? section.insight(model) : null;
+    if (insight) node.appendChild(el('p', 'ha-insight', insight));
+
+    renderCards(node, section.cards, model);
 
     if (narrative && narrative.points && narrative.points.length) {
       const list = el('ul', 'ha-points');
@@ -479,6 +622,8 @@
     }
 
     current = { host, model };
+    // Les blocs de détail du rendu précédent partent avec le document qu'on efface.
+    printHandlers = [];
     host.textContent = '';
     host.classList.add('ha-report');
     E.hideTooltip();

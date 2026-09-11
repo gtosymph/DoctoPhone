@@ -496,6 +496,72 @@
 .ha-kpi .ha-l { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
 
 .ha-grid2 { display: grid; grid-template-columns: 1fr; gap: 14px; }
+/* ------------------------------------------------- chiffres de tête, phrase, détail */
+
+/*
+ * Deux rangées d'indicateurs plutôt qu'une grille uniforme de six.
+ *
+ * Six nombres du même corps ne disent pas où regarder ; deux en tête et quatre en second
+ * rang font le tri à la place du lecteur. Les deux de tête sont choisis section par
+ * section dans `report-sections.js`, et ce sont simplement les deux premiers de la liste.
+ */
+.ha-kpis-lead {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  margin-bottom: 10px;
+}
+.ha-kpis-lead .ha-kpi {
+  padding: 14px 16px;
+}
+.ha-kpis-lead .ha-n {
+  font-size: 30px;
+}
+.ha-kpis-lead .ha-l {
+  font-size: 13px;
+}
+
+/*
+ * La phrase de lecture : ce que VOS données montrent.
+ *
+ * Elle se distingue de la note d'une carte, qui explique la méthode, et du verdict du
+ * LLM, qui interprète. Elle est calculée sur l'appareil et ne passe par aucun modèle :
+ * c'est pour cela qu'elle peut porter des chiffres sans risque d'invention.
+ */
+.ha-insight {
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--ink);
+  border-left: 2px solid var(--domain, var(--accent));
+  padding: 2px 0 2px 12px;
+  margin: 0 0 18px;
+  max-width: 62ch;
+}
+
+/*
+ * Le détail replié.
+ *
+ * Ce n'est volontairement pas un `<details>` : le contenu d'un `<details>` fermé ne
+ * s'imprime pas, et le rapport imprimé doit être complet — c'est son usage principal,
+ * chez le médecin. Voir la règle d'impression plus bas, qui force ce bloc ouvert.
+ */
+.ha-detail { margin-top: 6px; }
+
+.ha-detail-toggle {
+  border: 1px solid var(--ring);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--domain-ink, var(--accent));
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 7px 15px;
+  cursor: pointer;
+}
+.ha-detail-toggle:hover { background: var(--domain-soft, var(--accent-soft)); }
+.ha-detail-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.ha-detail-body { margin-top: 14px; }
+
 @media (min-width: 720px) {
   .ha-grid2 { grid-template-columns: 1fr 1fr; }
   .ha-span2 { grid-column: 1 / -1; }
@@ -609,4 +675,13 @@
   .ha-tabbar-wrap { display: none; }
   .ha-tabpanel { display: block !important; }
   .ha-tabpanel[data-tab="tout"] { display: none !important; }
+
+  /*
+   * Le détail replié sort en entier. Un rapport remis à un médecin doit être complet :
+   * c'est précisément parce que le papier n'a pas de bouton que le bloc n'est pas un
+   * `<details>`, dont le contenu fermé reste invisible à l'impression quoi qu'on écrive
+   * en CSS.
+   */
+  .ha-detail-toggle { display: none; }
+  .ha-detail-body[hidden] { display: block !important; }
 }

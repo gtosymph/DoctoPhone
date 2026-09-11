@@ -672,6 +672,30 @@
     return n;
   }
 
+  /**
+   * Le nombre de graphiques dessinés AVANT tout dépliage.
+   *
+   * Depuis la mise en hiérarchie, seules les cartes marquées `essential` sortent tout de
+   * suite ; le reste attend un clic sur « Voir le détail ». Un SVG construit dans un
+   * conteneur masqué n'a aucune largeur à mesurer, donc le dessin est différé, pas caché.
+   */
+  function countEssentialCharts() {
+    let n = 1; // CORRELATIONS_CARD, toujours dessinée dans Synthèse.
+    for (const section of HA.reportSections.SECTIONS) {
+      const essential = section.cards.filter(c => c.essential);
+      // Une section sans carte essentielle montre tout : mieux vaut une section longue
+      // qu'une section entièrement cachée derrière un bouton.
+      const shown = essential.length ? essential : section.cards;
+      for (const card of shown) if (card.chart) n += 1;
+    }
+    return n;
+  }
+
+  /** Déplie tous les blocs de détail d'un panneau, comme le ferait un lecteur curieux. */
+  function expandAllDetails(root) {
+    for (const button of root.querySelectorAll('.ha-detail-toggle')) button.click();
+  }
+
   test('renderReport construit sept panneaux d\'onglets, un seul visible à la fois', () => {
     const host = document.createElement('div');
     HA.report.renderReport(host, HA.smokeFixture.build());
@@ -686,17 +710,57 @@
     const host = document.createElement('div');
     HA.report.renderReport(host, HA.smokeFixture.build());
     const toutPanel = host.querySelector('.ha-tabpanel[data-tab="tout"]');
-    const expected = countConfiguredCharts();
+    const expected = countEssentialCharts();
     assertEqual(toutPanel.children.length, 0, 'Tout doit rester vide tant qu\'il n\'a pas été ouvert (paresse)');
     const svgBefore = host.querySelectorAll('svg').length;
-    assertEqual(svgBefore, expected, 'chaque graphique n\'est encore dessiné qu\'une fois, dans son propre onglet de domaine');
+    assertEqual(svgBefore, expected, 'chaque graphique essentiel n\'est encore dessiné qu\'une fois, dans son propre onglet de domaine');
 
     host.querySelector('#ha-tab-tout').click();
 
     assertEqual(toutPanel.querySelectorAll('svg').length, expected,
-      'Tout redessine chaque graphique une seconde fois, une fois ouvert');
+      'Tout redessine chaque graphique essentiel une seconde fois, une fois ouvert');
     assertEqual(host.querySelectorAll('svg').length, svgBefore + expected,
       'ouvrir Tout ne doit pas redessiner les six autres panneaux, seulement construire le sien');
+  });
+
+  test('déplier le détail rend tous les graphiques configurés, aucun ne disparaît', () => {
+    const host = document.createElement('div');
+    HA.report.renderReport(host, HA.smokeFixture.build());
+    host.querySelector('#ha-tab-tout').click();
+    const toutPanel = host.querySelector('.ha-tabpanel[data-tab="tout"]');
+
+    const avant = toutPanel.querySelectorAll('svg').length;
+    expandAllDetails(toutPanel);
+    const apres = toutPanel.querySelectorAll('svg').length;
+
+    // La hiérarchie range, elle n'enlève rien. C'est la promesse faite dans les specs :
+    // « l'essentiel visible, le détail replié, rien ne disparaît ».
+    assert(apres > avant, 'déplier n\'ajoute aucun graphique');
+    assertEqual(apres, countConfiguredCharts(),
+      'un graphique configuré reste introuvable même après dépliage');
+  });
+
+  test('le détail se dessine à la première ouverture, pas avant', () => {
+    const host = document.createElement('div');
+    HA.report.renderReport(host, HA.smokeFixture.build());
+    host.querySelector('#ha-tab-sleep').click();
+    const panel = host.querySelector('.ha-tabpanel[data-tab="sleep"]');
+    const body = panel.querySelector('.ha-detail-body');
+    const button = panel.querySelector('.ha-detail-toggle');
+
+    // Un SVG construit dans un conteneur masqué sort à zéro pixel de large : le dessin est
+    // donc différé, pas simplement caché.
+    assertEqual(body.querySelectorAll('.ha-card').length, 0, 'le détail est dessiné avant son ouverture');
+    assert(body.hidden, 'le détail doit partir replié');
+
+    button.click();
+    assert(!body.hidden, 'le bouton n\'ouvre pas le bloc');
+    assert(body.querySelectorAll('.ha-card').length > 0, 'le bloc ouvert reste vide');
+    assertEqual(button.getAttribute('aria-expanded'), 'true', 'l\'état du bouton n\'est pas annoncé');
+
+    button.click();
+    assert(body.hidden, 'le second clic ne referme pas le bloc');
+    assertEqual(button.getAttribute('aria-expanded'), 'false');
   });
 
   test('l\'onglet actif survit à un redessin complet (thème, période)', () => {
@@ -722,7 +786,7 @@
 
     const toutPanel = host.querySelector('.ha-tabpanel[data-tab="tout"]');
     assert(!toutPanel.hidden, 'Tout doit rester l\'onglet visible après le redessin');
-    assertEqual(toutPanel.querySelectorAll('svg').length, countConfiguredCharts(),
+    assertEqual(toutPanel.querySelectorAll('svg').length, countEssentialCharts(),
       'Tout doit être reconstruit tout de suite, pas au prochain clic');
   });
 
@@ -2080,6 +2144,106 @@
     HA.chat.render(host, [{ role: 'user', text: 'Bonjour', at: 1 }], {});
     assert(!host.classList.contains('ha-chat-empty'), 'le modificateur doit disparaître une fois la conversation non vide');
     assertEqual(host.querySelectorAll('.ha-chat-suggestion').length, 0);
+  });
+
+  // ---------------------------------------------------------------- phrases de lecture
+  //
+  // Chaque section du rapport porte une phrase calculée à partir de `ReportModel`, qui dit
+  // ce que VOS données montrent — à côté de la note fixe, qui explique la méthode.
+  //
+  // Ces phrases ne passent jamais par le LLM et ne lui sont jamais montrées. C'est la même
+  // règle que le catalogue de séries : le modèle désigne, il ne recopie aucun chiffre, donc
+  // il ne peut pas en inventer un. Sur une donnée de santé, une phrase absente coûte moins
+  // cher qu'une phrase fausse.
+
+  /** Un `ReportModel` réduit aux sections que la phrase testée lit. */
+  function insightModel(overrides) {
+    const base = {
+      meta: {}, tiles: [],
+      sleep: { nightly: [], monthly: [], dayOfWeek: [], distribution: [], stagesMonthly: [], kpi: {} },
+      heart: { monthly: [], restingDaily: [], hourly: [], hrvMonthly: [], hrvDaily: [], bloodPressure: [], ecg: [], kpi: {} },
+      activity: { stepsDaily: [], stepsRolling7: [], stepsMonthly: [], stepsDayOfWeek: [], exerciseMonthly: [], exerciseByKind: [], floorsMonthly: [], kpi: {} },
+      body: { daily: [], kpi: {} },
+      stress: { monthly: [], hourly: [], dayOfWeek: [], daily: [], vitalityDaily: [], kpi: {} },
+      breathing: { spo2Monthly: [], spo2Daily: [], respiratoryDaily: [], skinTempDaily: [], kpi: {} },
+      correlations: [], narrative: null,
+    };
+    return Object.assign(base, overrides || {});
+  }
+
+  function insightOf(key, model) {
+    const section = HA.reportSections.SECTIONS.find(s => s.key === key);
+    assert(section, 'section introuvable : ' + key);
+    assert(typeof section.insight === 'function', 'la section ' + key + ' n a pas de phrase de lecture');
+    return section.insight(model);
+  }
+
+  test('la phrase du sommeil cite le nombre de nuits et la part sous 6 h', () => {
+    const model = insightModel({
+      sleep: { nightly: [], monthly: [], dayOfWeek: [], distribution: [], stagesMonthly: [],
+        kpi: { nights: 294, pctUnder6h: 14, bedSpreadHours: 1.4 } },
+    });
+    const phrase = insightOf('sleep', model);
+    assert(phrase.includes('294'), 'le nombre de nuits manque : ' + phrase);
+    assert(phrase.includes('14'), 'la part sous 6 h manque : ' + phrase);
+    // Le même format que l'indicateur « irrégularité du coucher » de la section, pas un
+    // nombre décimal : la même grandeur ne se lit pas en deux formats sur un même écran.
+    assert(phrase.includes('1h24'), 'la dispersion du coucher manque ou change de format : ' + phrase);
+  });
+
+  test('la phrase du coeur nomme huit jours sur dix, pas neuf', () => {
+    const model = insightModel({
+      heart: { monthly: [], restingDaily: [], hourly: [], hrvMonthly: [], hrvDaily: [],
+        bloodPressure: [], ecg: [], kpi: { restingP10: 44, restingP90: 55, measuredDays: 341 } },
+    });
+    const phrase = insightOf('heart', model);
+    // p10 a p90 couvre 80 % des jours. « neuf jours sur dix » serait une surpromesse
+    // silencieuse, et c'est exactement le genre d'erreur qu'une phrase ecrite a la main
+    // laisse passer.
+    assert(phrase.includes('huit jours sur dix'), 'la couverture annoncee est fausse : ' + phrase);
+    assert(phrase.includes('44') && phrase.includes('55'), phrase);
+  });
+
+  test('chaque phrase rend null quand ses chiffres manquent', () => {
+    const empty = insightModel();
+    for (const key of ['sleep', 'heart', 'activity', 'body', 'stress', 'breathing']) {
+      assertEqual(insightOf(key, empty), null, 'la section ' + key + ' invente une phrase sans donnees');
+    }
+  });
+
+  test('la phrase du corps porte le signe de la variation', () => {
+    const gain = insightModel({ body: { daily: [], kpi: { deltaKg: 1.8, deltaMuscleKg: 0.4 } } });
+    const loss = insightModel({ body: { daily: [], kpi: { deltaKg: -2.4, deltaMuscleKg: -0.3 } } });
+    assert(insightOf('body', gain).includes('+1,8'), insightOf('body', gain));
+    // Le signe moins est un vrai signe moins typographique (U+2212), pas un trait d'union :
+    // c'est la convention du reste du rapport, et il s'aligne sur la meme chasse que le plus.
+    assert(insightOf('body', loss).includes('−2,4'), insightOf('body', loss));
+  });
+
+  test('une phrase partielle vaut mieux que pas de phrase du tout', () => {
+    // Le poids est connu, la masse musculaire non : la phrase doit dire ce qu'elle sait.
+    const model = insightModel({ body: { daily: [], kpi: { deltaKg: -2.4, deltaMuscleKg: null } } });
+    const phrase = insightOf('body', model);
+    assert(phrase !== null, 'la phrase disparait alors que le poids est connu');
+    assert(!phrase.includes('muscle'), 'la phrase parle du muscle sans le connaitre : ' + phrase);
+  });
+
+  test('aucune phrase ne juge ni ne conseille', () => {
+    const model = insightModel({
+      sleep: { nightly: [], monthly: [], dayOfWeek: [], distribution: [], stagesMonthly: [],
+        kpi: { nights: 294, pctUnder6h: 62, bedSpreadHours: 3.1 } },
+      stress: { monthly: [], hourly: [], dayOfWeek: [], daily: [], vitalityDaily: [],
+        kpi: { percentAbove60: 71, peakHour: 15 } },
+    });
+    // Le rapport decrit, il ne diagnostique pas. Le vocabulaire d'alerte appartient au
+    // medecin, pas a une app qui lit une montre.
+    const interdits = ['inquietant', 'grave', 'dangereux', 'anormal', 'devriez', 'il faut', 'risque'];
+    for (const key of ['sleep', 'stress']) {
+      const phrase = (insightOf(key, model) || '').toLowerCase();
+      for (const mot of interdits) {
+        assert(!phrase.includes(mot), 'la phrase de ' + key + ' porte un jugement : ' + phrase);
+      }
+    }
   });
 
   async function runAll() {
