@@ -193,11 +193,20 @@ dependencies {
  * Les pages d'essai des moteurs (`smoke.html`, `smoke-fixture.js`, `chat-smoke.html`, et
  * tout fichier dont le nom contient `smoke`) sont utiles en développement seulement.
  * Elles grossiraient l'APK et exposeraient un écran de test dans l'app livrée : exclues.
+ *
+ * `web/report/fonts/` suit le même chemin, sans règle particulière. Deux choses à ne pas
+ * « optimiser » :
+ * - les `.woff2` doivent entrer dans l'APK, sinon la WebView n'a aucune police à charger —
+ *   elle n'a pas d'accès réseau et ne peut pas aller les chercher ;
+ * - les deux fichiers `OFL-*.txt` aussi. La licence SIL OFL exige d'être distribuée avec
+ *   la fonte. Ils pèsent 9 Ko à eux deux.
  */
 val syncReportAssets by tasks.registering(Sync::class) {
     from(rootProject.layout.projectDirectory.dir("web/report")) {
         into("report")
-        exclude("smoke.html", "smoke-fixture.js")
+        // Le motif couvre `smoke.html`, `smoke-fixture.js` et `chart-spec-smoke.html`, que
+        // l'exclusion nommée laissait passer jusqu'ici malgré l'intention du commentaire.
+        exclude("**/*smoke*")
     }
     from(rootProject.layout.projectDirectory.dir("web/lib")) {
         into("lib")
@@ -220,6 +229,13 @@ val syncReportAssets by tasks.registering(Sync::class) {
 tasks.withType<Test>().configureEach {
     inputs.file(rootProject.layout.projectDirectory.file("web/report/chart-catalog.js"))
         .withPropertyName("chartCatalogJs")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+
+    // Même raison pour la feuille de style : `ThemeTokenParityTest` la relit pour comparer
+    // la palette de Compose à celle du rapport. Sans cette déclaration, une couleur changée
+    // dans le CSS seul ne relancerait pas le test qui existe précisément pour l'attraper.
+    inputs.file(rootProject.layout.projectDirectory.file("web/report/report.css"))
+        .withPropertyName("reportCss")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 

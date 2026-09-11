@@ -2,69 +2,66 @@ package com.kmt.healthanalyzer.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Palette de repli (utilisée quand la couleur dynamique n'est pas disponible, Android < 12).
-// Ton principal : vert profond santé. Tons secondaires : sable et ardoise.
+/*
+ * Palette « éditorial imprimé » de la coquille native.
+ *
+ * **Ce fichier est un doublon, comme `DomainColors.kt`.** L'original vit dans
+ * `web/report/report.css` et reste la référence : Compose ne sait pas lire une variable
+ * CSS. Chaque valeur ci-dessous porte en commentaire le jeton dont elle vient.
+ * `ThemeTokenParityTest` relit la feuille de style et compare : une valeur changée d'un
+ * seul côté fait échouer la suite, plutôt que de laisser les deux moitiés de l'app diverger
+ * en silence.
+ *
+ * Avant, cette palette était un vert santé, et la coquille suivait en plus la couleur
+ * dynamique d'Android 12. L'utilisateur passait donc d'une barre verte — ou de son fond
+ * d'écran — à un rapport violet sur papier, dans le même écran. Un seul jeu de couleurs
+ * pour les deux moitiés vaut mieux qu'une adaptation au système qu'aucune des deux ne
+ * partage.
+ *
+ * Le fond est un papier cassé, pas un blanc d'écran : c'est le premier signe de la
+ * direction, et il ne coûte rien.
+ */
 
 // --- Clair ---
-val GreenPrimaryLight = Color(0xFF1B6B4A)
-val OnGreenPrimaryLight = Color(0xFFFFFFFF)
-val GreenPrimaryContainerLight = Color(0xFFA8F2C9)
-val OnGreenPrimaryContainerLight = Color(0xFF00210F)
+val PaperLight = Color(0xFFF9F9F7) // --page
+val SurfaceLight = Color(0xFFFCFCFB) // --surface
+val InkLight = Color(0xFF0B0B0B) // --ink
+val InkMutedLight = Color(0xFF52514E) // --ink-2
+val GridLight = Color(0xFFE1E0D9) // --grid
+val AxisLight = Color(0xFFC3C2B7) // --axis
+val AccentLight = Color(0xFF4A3AA7) // --accent
+val AccentSoftLight = Color(0x144A3AA7) // --accent-soft
+val CriticalLight = Color(0xFFD03B3B) // --critical
 
-val SandSecondaryLight = Color(0xFF6B5D4F)
-val OnSandSecondaryLight = Color(0xFFFFFFFF)
-val SandSecondaryContainerLight = Color(0xFFF3E0CB)
-val OnSandSecondaryContainerLight = Color(0xFF241A0C)
-
-val SlateTertiaryLight = Color(0xFF3E5D66)
-val OnSlateTertiaryLight = Color(0xFFFFFFFF)
-val SlateTertiaryContainerLight = Color(0xFFC1E8F2)
-val OnSlateTertiaryContainerLight = Color(0xFF001F24)
-
-val ErrorLight = Color(0xFFBA1A1A)
-val OnErrorLight = Color(0xFFFFFFFF)
-val ErrorContainerLight = Color(0xFFFFDAD6)
-val OnErrorContainerLight = Color(0xFF410002)
-
-val BackgroundLight = Color(0xFFFBFDF8)
-val OnBackgroundLight = Color(0xFF191C1A)
-val SurfaceVariantLight = Color(0xFFDCE5DA)
-val OnSurfaceVariantLight = Color(0xFF414942)
-val OutlineLight = Color(0xFF717972)
+/**
+ * Encre lisible sur un aplat [AccentLight] / [AccentDark] — jeton `--accent-contrast`.
+ *
+ * Ce n'est pas simplement « blanc en clair, noir en sombre ». En thème sombre l'accent
+ * devient un lavande clair sur lequel du blanc tombe à 3,13:1, sous le seuil de 4,5:1 ;
+ * l'encre `#14130f` y remonte à 5,95:1. Les deux moitiés de l'app posent du texte sur ce
+ * même violet et doivent y lire la même encre.
+ */
+val OnAccentLight = Color(0xFFFFFFFF) // --accent-contrast
+val OnAccentDark = Color(0xFF14130F) // --accent-contrast (sombre)
 
 // --- Sombre ---
-val GreenPrimaryDark = Color(0xFF8CD5AB)
-val OnGreenPrimaryDark = Color(0xFF00391D)
-val GreenPrimaryContainerDark = Color(0xFF00522D)
-val OnGreenPrimaryContainerDark = Color(0xFFA8F2C9)
-
-val SandSecondaryDark = Color(0xFFD7C3AB)
-val OnSandSecondaryDark = Color(0xFF3B2F20)
-val SandSecondaryContainerDark = Color(0xFF534635)
-val OnSandSecondaryContainerDark = Color(0xFFF3E0CB)
-
-val SlateTertiaryDark = Color(0xFFA5CCD6)
-val OnSlateTertiaryDark = Color(0xFF06333C)
-val SlateTertiaryContainerDark = Color(0xFF254A53)
-val OnSlateTertiaryContainerDark = Color(0xFFC1E8F2)
-
-val ErrorDark = Color(0xFFFFB4AB)
-val OnErrorDark = Color(0xFF690005)
-val ErrorContainerDark = Color(0xFF93000A)
-val OnErrorContainerDark = Color(0xFFFFDAD6)
-
-val BackgroundDark = Color(0xFF10140F)
-val OnBackgroundDark = Color(0xFFE1E3DE)
-val SurfaceVariantDark = Color(0xFF414942)
-val OnSurfaceVariantDark = Color(0xFFC0C9BF)
-val OutlineDark = Color(0xFF8B938C)
+val PaperDark = Color(0xFF0D0D0D) // --page
+val SurfaceDark = Color(0xFF1A1A19) // --surface
+val InkDark = Color(0xFFFFFFFF) // --ink
+val InkMutedDark = Color(0xFFC3C2B7) // --ink-2
+val GridDark = Color(0xFF2C2C2A) // --grid
+val AxisDark = Color(0xFF383835) // --axis
+val AccentDark = Color(0xFF9085E9) // --accent
+val AccentSoftDark = Color(0x1F9085E9) // --accent-soft
+val CriticalDark = Color(0xFFE66767) // --critical
 
 // --- Palette sémantique (tendances de santé) ---
 // Une hausse n'est pas toujours une amélioration : ces couleurs suivent MetricTrend.isImprovement,
-// jamais le sens brut de la variation.
-val ImprovementLight = Color(0xFF1E7D4A)
-val ImprovementDark = Color(0xFF80D9A8)
-val DegradationLight = Color(0xFFB3590A)
-val DegradationDark = Color(0xFFFFB870)
-val NeutralTrendLight = Color(0xFF5C6360)
-val NeutralTrendDark = Color(0xFFB9C0BB)
+// jamais le sens brut de la variation. Elles restent distinctes des couleurs de domaine, qui
+// disent « de quoi on parle » et non « est-ce que ça va ».
+val ImprovementLight = Color(0xFF006300) // --good-text
+val ImprovementDark = Color(0xFF0CA30C) // --good-text (sombre)
+val DegradationLight = Color(0xFFB04A14) // --serious
+val DegradationDark = Color(0xFFF0A07A) // --serious (sombre)
+val NeutralTrendLight = Color(0xFF726F68) // --muted
+val NeutralTrendDark = Color(0xFF94928B) // --muted (sombre)

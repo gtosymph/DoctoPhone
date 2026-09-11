@@ -14,13 +14,83 @@
  * aux intertitres de groupe, via l'attribut `data-domain` — voir « Domaines » plus bas.
  */
 
+/*
+ * Les polices sont embarquées, jamais chargées depuis un service distant, et ce n'est
+ * pas un choix de confort : la WebView Android n'a aucun accès réseau, et le rapport
+ * exporté doit s'ouvrir sur n'importe quelle machine sans connexion. Un `@import` vers
+ * Google Fonts retomberait en silence sur la police système dans les deux cas.
+ *
+ * Ce sont des instances statiques, pas les fontes variables d'origine : deux graisses de
+ * chaque famille pèsent 74 Ko en woff2, contre 162 Ko pour les deux fontes variables.
+ * L'axe optique de Source Serif 4 est figé à 20, ce qui couvre la plage de corps
+ * réellement utilisée ici (15 à 34 px).
+ *
+ * Le sous-ensemble est le jeu « latin » de Google Fonts. Un signe hors de ce jeu — une
+ * flèche ou un « supérieur ou égal » que le modèle écrirait dans son bilan — bascule sur
+ * la pile de repli, ce qui est le comportement voulu : un glyphe dépareillé vaut mieux
+ * qu'un rectangle vide.
+ *
+ * Les fichiers vivent dans `web/report/fonts/`, donc la tâche Gradle `Sync` les copie
+ * déjà vers les assets de l'app : il n'y a rien à ajouter au build.
+ * L'export autonome, lui, ne peut pas suivre un chemin relatif : il n'y a plus de dossier
+ * à côté du fichier. Les deux bornes ci-dessous délimitent la zone que les exportateurs
+ * remplacent par une police en `data:` — voir `ReportExportTemplate.inlineExportFonts`
+ * côté Kotlin et `inlineExportFonts` dans `lib/report-export.js`. Ne les enlevez pas :
+ * les deux exportateurs échouent bruyamment si elles manquent, ce qui vaut mieux qu'un
+ * export publié sans ses polices.
+ */
+/* ha-font-faces:start */
+@font-face {
+  font-family: "Source Serif 4";
+  src: url("fonts/source-serif-4-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Source Serif 4";
+  src: url("fonts/source-serif-4-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Public Sans";
+  src: url("fonts/public-sans-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Public Sans";
+  src: url("fonts/public-sans-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+/* ha-font-faces:end */
+
 :root {
   color-scheme: light;
+
+  /*
+   * Deux familles, deux rôles, jamais mélangés : la serif porte les titres et le grain
+   * « document », la sans porte le texte courant, les libellés et surtout les chiffres.
+   * Public Sans a de vrais chiffres tabulaires, ce qui est la raison de son choix : dans
+   * ce rapport, des nombres s'alignent en colonne à chaque écran.
+   *
+   * Les deux familles n'existent qu'en 400 et 600. N'écrivez pas `font-weight: 500` ni
+   * `640` : le navigateur synthétiserait une graisse intermédiaire en épaississant les
+   * contours, et le résultat est visiblement plus sale que la vraie graisse.
+   */
+  --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --sans: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
   --page: #f9f9f7;
   --surface: #fcfcfb;
   --ink: #0b0b0b;
   --ink-2: #52514e;
-  --muted: #898781;
+  --muted: #726f68;
   --grid: #e1e0d9;
   --axis: #c3c2b7;
   --ring: rgba(11, 11, 11, .10);
@@ -39,8 +109,8 @@
   --s-red: #e34948;
   --good: #0ca30c;
   --good-text: #006300;
-  --warning: #fab219;
-  --serious: #ec835a;
+  --warning: #8f6200;
+  --serious: #b04a14;
   --critical: #d03b3b;
   --band: rgba(42, 120, 214, .07);
 
@@ -74,7 +144,7 @@
     --surface: #1a1a19;
     --ink: #ffffff;
     --ink-2: #c3c2b7;
-    --muted: #898781;
+    --muted: #94928b;
     --grid: #2c2c2a;
     --axis: #383835;
     --ring: rgba(255, 255, 255, .10);
@@ -89,6 +159,13 @@
     --s-violet: #9085e9;
     --s-red: #e66767;
     --good-text: #0ca30c;
+    /* Les trois jetons ci-dessous servent de COULEUR DE TEXTE (`.ha-pill`,
+     * `.report-inline-status`). Ils n'étaient pas redéfinis ici et héritaient donc des
+     * valeurs claires, calculées pour du texte sur papier : `--critical` tombait à
+     * 3,62:1 sur `--surface`, sous le seuil de 4,5:1. Mesuré, pas supposé. */
+    --warning: #e0a52b;
+    --serious: #f0a07a;
+    --critical: #e66767;
     --band: rgba(57, 135, 229, .10);
 
   --d-sleep: #9085e9;
@@ -115,7 +192,7 @@
   --surface: #1a1a19;
   --ink: #ffffff;
   --ink-2: #c3c2b7;
-  --muted: #898781;
+  --muted: #94928b;
   --grid: #2c2c2a;
   --axis: #383835;
   --ring: rgba(255, 255, 255, .10);
@@ -130,6 +207,13 @@
   --s-violet: #9085e9;
   --s-red: #e66767;
   --good-text: #0ca30c;
+  /* Les trois jetons ci-dessous servent de COULEUR DE TEXTE (`.ha-pill`,
+   * `.report-inline-status`). Ils n'étaient pas redéfinis ici et héritaient donc des
+   * valeurs claires, calculées pour du texte sur papier : `--critical` tombait à
+   * 3,62:1 sur `--surface`, sous le seuil de 4,5:1. Mesuré, pas supposé. */
+  --warning: #e0a52b;
+  --serious: #f0a07a;
+  --critical: #e66767;
   --band: rgba(57, 135, 229, .10);
 
   --d-sleep: #9085e9;
@@ -152,11 +236,32 @@
 .ha-report {
   background: var(--page);
   color: var(--ink);
-  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font: 400 16px/1.55 var(--sans);
+  /*
+   * Chiffres tabulaires sur tout le rapport, texte courant compris. C'est un document de
+   * mesures : des nombres s'alignent en colonne dans les tuiles, les indicateurs et les
+   * tableaux, et une largeur de chiffre variable les décale d'une ligne à l'autre. Le
+   * texte rédigé y perd un cheveu de confort de lecture ; l'alignement des colonnes vaut
+   * largement cet échange.
+   */
+  font-variant-numeric: tabular-nums;
   padding: 20px 16px 64px;
   margin: 0 auto;
   max-width: 1040px;
   -webkit-text-size-adjust: 100%;
+}
+
+/*
+ * La serif ne sert qu'aux titres. Elle est déclarée ici, en un seul endroit, plutôt que
+ * répétée sur chaque règle de titre : un titre ajouté plus tard hérite alors du bon
+ * rendu sans qu'on ait à y penser.
+ */
+.ha-masthead h1,
+.ha-sec-head h2,
+.ha-card h3,
+.ha-step h4 {
+  font-family: var(--serif);
+  font-weight: 600;
 }
 
 .ha-report * { box-sizing: border-box; }
@@ -233,7 +338,7 @@
   background: transparent;
   color: var(--ink-2);
   font: inherit;
-  font-weight: 640;
+  font-weight: 600;
   font-size: 13.5px;
   padding: 9px 13px;
   white-space: nowrap;
@@ -254,8 +359,8 @@
 .ha-group-title {
   color: var(--domain-ink, var(--muted));
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .05em;
+  font-weight: 600;
+  letter-spacing: .08em;
   text-transform: uppercase;
   margin: 22px 0 10px;
   padding-bottom: 5px;
@@ -269,12 +374,12 @@
 .ha-eyebrow {
   color: var(--muted);
   font-size: 12.5px;
-  letter-spacing: .06em;
+  letter-spacing: .08em;
   text-transform: uppercase;
   margin: 0 0 8px;
 }
 .ha-masthead h1 {
-  font-size: clamp(24px, 5vw, 34px);
+  font-size: clamp(26px, 5vw, 34px);
   line-height: 1.18;
   letter-spacing: -.02em;
   margin: 0 0 10px;
@@ -301,7 +406,7 @@
   padding: 16px 18px;
   margin: 0 0 24px;
 }
-.ha-verdict .ha-lead { font-weight: 650; color: var(--ink); }
+.ha-verdict .ha-lead { font-weight: 600; color: var(--ink); }
 .ha-verdict p { margin: 0; color: var(--ink-2); }
 
 /* ---------------------------------------------------------------- tuiles */
@@ -323,12 +428,12 @@
 }
 .ha-tile .ha-k { color: var(--muted); font-size: 12px; }
 .ha-tile .ha-v {
-  font-size: 25px;
-  font-weight: 640;
+  font-size: 26px;
+  font-weight: 600;
   letter-spacing: -.02em;
   font-variant-numeric: tabular-nums;
 }
-.ha-tile .ha-v small { font-size: 14px; font-weight: 500; color: var(--ink-2); }
+.ha-tile .ha-v small { font-size: 14px; font-weight: 400; color: var(--ink-2); }
 .ha-tile .ha-s { color: var(--muted); font-size: 12px; }
 .ha-pill {
   align-self: flex-start;
@@ -360,11 +465,11 @@
 .ha-idx {
   color: var(--muted);
   font-size: 13px;
-  font-weight: 660;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .ha-sec-head h2 {
-  font-size: clamp(19px, 3.4vw, 23px);
+  font-size: clamp(20px, 3.4vw, 24px);
   letter-spacing: -.015em;
   margin: 0;
 }
@@ -385,7 +490,7 @@
 .ha-kpi .ha-n {
   display: block;
   font-size: 19px;
-  font-weight: 640;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .ha-kpi .ha-l { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
@@ -403,7 +508,7 @@
   padding: 14px 15px 12px;
   min-width: 0;
 }
-.ha-card h3 { font-size: 15px; margin: 0 0 3px; letter-spacing: -.01em; }
+.ha-card h3 { font-size: 16px; margin: 0 0 3px; letter-spacing: -.01em; }
 .ha-note { color: var(--muted); font-size: 12.5px; margin: 0 0 10px; }
 
 .ha-chart { width: 100%; }
@@ -458,9 +563,9 @@
   display: grid;
   place-items: center;
   font-size: 13px;
-  font-weight: 660;
+  font-weight: 600;
 }
-.ha-step h4 { margin: 2px 0 4px; font-size: 15px; }
+.ha-step h4 { margin: 2px 0 4px; font-size: 16px; }
 .ha-step p { margin: 0; color: var(--ink-2); }
 
 .ha-footer {
@@ -488,7 +593,7 @@
   max-width: 240px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, .22);
 }
-.ha-tooltip b { font-weight: 640; }
+.ha-tooltip b { font-weight: 600; }
 
 @media print {
   .ha-report { max-width: none; padding: 0; }

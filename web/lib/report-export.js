@@ -17,6 +17,16 @@
   const TEMPLATE_URL = 'report/export-template.html';
   const CSS_URL = 'report/report.css';
 
+  // Bornes posées dans `report/report.css` autour de ses quatre règles `@font-face`.
+  const FONTS_START = '/* ha-font-faces:start */';
+  const FONTS_END = '/* ha-font-faces:end */';
+
+  // Seule fonte embarquée dans l'export : les titres sont en serif, tous en 600.
+  const SERIF_URL = 'report/fonts/source-serif-4-600.woff2';
+
+  // La pile de `--sans` moins « Public Sans », qui n'est pas embarquée.
+  const SYSTEM_SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
   // Uniquement ce qu'il faut pour DESSINER un modèle déjà construit : ni
   // `report-builder.js`, ni les constructeurs de section (`lib/report-sections/`),
   // qui ne servent qu'à fabriquer le modèle depuis les mesures brutes.
@@ -31,6 +41,76 @@
     'report/report-render.js',
   ];
 
+
+  /**
+   * Encode un binaire en base64 sans dérouler tout le tableau d'un coup.
+   *
+   * `String.fromCharCode(...octets)` sur une fonte de 24 ko passe 24 000 arguments à un
+   * appel de fonction : selon le moteur, cela lève un `RangeError` au lieu d'encoder.
+   * Le découpage par tranches évite complètement cette limite.
+   *
+   * @param {ArrayBuffer} buffer
+   * @returns {string}
+   */
+  function toBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    const CHUNK = 0x8000;
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    }
+    return btoa(binary);
+  }
+
+  /**
+   * Prépare la feuille de style pour un export autonome : les polices y voyagent en
+   * `data:`, plus par chemin relatif.
+   *
+   * `report.css` déclare ses fontes en `url("fonts/…woff2")`, ce qui est juste pour la
+   * version web et pour la WebView Android : toutes deux servent un dossier. L'export,
+   * lui, est un fichier unique qu'on recopie, qu'on envoie, qu'on ouvre depuis un
+   * téléchargement. Le chemin relatif y échoue **sans message**, et le rapport retombe
+   * sur la police du système — un défaut invisible jusqu'à l'impression.
+   *
+   * Jumeau exact de `ReportExportTemplate.inlineExportFonts` côté Kotlin : les deux
+   * versions doivent produire le même document. Toute modification ici se reporte là-bas.
+   *
+   * @param {string} css le contenu de `report/report.css`
+   * @param {string} serifSemiBoldBase64 la fonte serif 600, encodée
+   * @returns {string}
+   */
+  function inlineExportFonts(css, serifSemiBoldBase64) {
+    if (!serifSemiBoldBase64) {
+      throw new Error(`La fonte serif de l'export est vide : ${SERIF_URL} est introuvable.`);
+    }
+    const start = css.indexOf(FONTS_START);
+    const end = css.indexOf(FONTS_END);
+    if (start === -1 || end <= start) {
+      throw new Error(
+        `Les bornes ${FONTS_START} / ${FONTS_END} sont absentes ou inversées dans report.css. `
+        + 'Elles délimitent les règles @font-face que l\'export doit remplacer ; sans elles, '
+        + 'le fichier produit chercherait ses polices dans un dossier voisin qui n\'existe '
+        + 'pas, et perdrait sa typographie en silence.'
+      );
+    }
+
+    const embedded =
+      '/* Polices de l\'export : embarquées, car un fichier autonome n\'a pas de dossier voisin. */\n'
+      + '@font-face {\n'
+      + '  font-family: "Source Serif 4";\n'
+      + `  src: url(data:font/woff2;base64,${serifSemiBoldBase64}) format("woff2");\n`
+      + '  font-weight: 600;\n'
+      + '  font-style: normal;\n'
+      + '}\n';
+
+    // L'override de `--sans` se pose APRÈS toute la feuille, jamais à la place des
+    // `@font-face` : `:root` est déclaré plus bas dans `report.css` et reprendrait la
+    // main sur une définition placée plus haut.
+    return css.slice(0, start) + embedded + css.slice(end + FONTS_END.length)
+      + '\n/* La sans n\'est pas embarquée : le texte courant de l\'export suit le système. */\n'
+      + `:root, :root[data-theme="dark"] { --sans: ${SYSTEM_SANS}; }\n`;
+  }
+
   /** Coquille de l'export (gabarit + styles + scripts) : ne dépend jamais du modèle, chargée une fois. */
   let cachedShell = null;
 
@@ -42,14 +122,27 @@
     return response.text();
   }
 
+  async function fetchBinary(url) {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Impossible de charger ${url} pour l'export (HTTP ${response.status}).`);
+    }
+    return response.arrayBuffer();
+  }
+
   async function loadShell() {
     if (cachedShell) return cachedShell;
-    const [template, css, ...scripts] = await Promise.all([
+    const [template, css, serif, ...scripts] = await Promise.all([
       fetchText(TEMPLATE_URL),
       fetchText(CSS_URL),
+      fetchBinary(SERIF_URL),
       ...SCRIPT_URLS.map(fetchText),
     ]);
-    cachedShell = { template, css, scripts: scripts.join('\n') };
+    cachedShell = {
+      template,
+      css: inlineExportFonts(css, toBase64(serif)),
+      scripts: scripts.join('\n'),
+    };
     return cachedShell;
   }
 
@@ -125,5 +218,7 @@
     URL.revokeObjectURL(url);
   }
 
-  root.HA.reportExport = { buildExportHtml, downloadExportHtml, escapeJsonForScript, exportFileName };
+  root.HA.reportExport = {
+    buildExportHtml, downloadExportHtml, escapeJsonForScript, exportFileName, inlineExportFonts,
+  };
 })();

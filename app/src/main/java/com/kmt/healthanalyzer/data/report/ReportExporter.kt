@@ -2,6 +2,7 @@ package com.kmt.healthanalyzer.data.report
 
 import android.content.Context
 import android.content.Intent
+import android.util.Base64
 import androidx.core.content.FileProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -62,13 +63,27 @@ class ReportExporter @Inject constructor(
 
     private fun buildHtml(reportJson: String): String {
         val template = readAsset(TEMPLATE_PATH)
-        val styles = readAsset(STYLES_PATH)
+        val styles = ReportExportTemplate.inlineExportFonts(
+            styles = readAsset(STYLES_PATH),
+            serifSemiBoldBase64 = readAssetAsBase64(ReportExportTemplate.SERIF_ASSET_NAME),
+        )
         val scripts = SCRIPT_PATHS.joinToString("\n") { readAsset(it) }
         return ReportExportTemplate.fill(template, styles, scripts, reportJson)
     }
 
     private fun readAsset(path: String): String =
         context.assets.open(path).bufferedReader(Charsets.UTF_8).use { it.readText() }
+
+    /**
+     * Lit un asset binaire et le rend en base64, sans retour à la ligne.
+     *
+     * [Base64.NO_WRAP] n'est pas un détail de forme : le résultat entre dans une `url()`
+     * CSS, et un retour à la ligne y couperait la valeur.
+     */
+    private fun readAssetAsBase64(path: String): String =
+        context.assets.open(path).use { stream ->
+            Base64.encodeToString(stream.readBytes(), Base64.NO_WRAP)
+        }
 
     companion object {
         /** Sous-dossier du cache exposé par `res/xml/file_paths.xml`, rien d'autre ne l'est. */

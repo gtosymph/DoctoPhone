@@ -7,7 +7,11 @@
 <link rel="stylesheet" href="report.css">
 <style>
   html, body { margin: 0; padding: 0; background: var(--page); }
-  #ha-loading { padding: 40px 16px; text-align: center; color: var(--muted); font: 14px -apple-system, system-ui, sans-serif; }
+  /* Les familles viennent de `report.css`, chargé juste au-dessus. Sans cette règle,
+     le texte posé hors de `.ha-report` — la conversation, l'amorce de premier usage —
+     retombe sur la police par défaut du moteur de rendu. */
+  body { font: 400 16px/1.55 var(--sans); font-variant-numeric: tabular-nums; color: var(--ink); }
+  #ha-loading { padding: 40px 16px; text-align: center; color: var(--muted); font-size: 14px; }
 </style>
 </head>
 <body>

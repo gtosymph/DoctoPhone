@@ -5,16 +5,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kmt.healthanalyzer.domain.drift.DriftMetric
 import com.kmt.healthanalyzer.domain.drift.DriftNarrator
@@ -31,19 +34,23 @@ import com.kmt.healthanalyzer.ui.theme.domainColors
  *
  * Sans dérive — le cas le plus fréquent — l'écran le dit sobrement, sans que cela ressemble
  * à une erreur : une simple ligne, l'icône et le ton d'un état normal, pas d'un vide.
- * Pendant le chargement, rien ne s'affiche : la section apparaît une fois le résultat prêt,
- * plutôt que de clignoter un état vide avant de se remplir.
+ *
+ * **Pendant le calcul, la section reste à l'écran** et montre qu'elle travaille. Elle
+ * disparaissait auparavant (`if (state.isLoading) return`), et le résultat surgissait
+ * ensuite sans prévenir : le rapport semblait ne pas avoir de bloc de dérives, puis en
+ * gagnait un. Un bloc qui s'efface se lit comme un bloc qui n'existe pas, et le lecteur
+ * n'a aucune raison d'attendre quelque chose dont rien ne signale la venue.
  */
 @Composable
 fun DriftSection(state: DriftUiState, modifier: Modifier = Modifier) {
-    if (state.isLoading) return
-
     val domain = HealthAnalyzerTheme.domainColors
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionLabel(text = "Dérives récentes", accent = domain.vitality.base)
 
         when {
+            state.isLoading -> LoadingRow(accent = domain.vitality.base)
+
             state.errorMessage != null -> Text(
                 text = state.errorMessage,
                 style = MaterialTheme.typography.bodyMedium,
@@ -56,6 +63,28 @@ fun DriftSection(state: DriftUiState, modifier: Modifier = Modifier) {
                 DriftRow(drift = drift, color = drift.metric.domainColor(domain))
             }
         }
+    }
+}
+
+/**
+ * L'attente du calcul : un indicateur discret et une phrase qui dit sur quoi il porte.
+ *
+ * « Comparaison en cours… » ne suffirait pas. La fenêtre comparée est la règle la moins
+ * évidente de ce bloc — sept jours contre les huit semaines précédentes — et c'est elle
+ * qui explique pourquoi une dérive apparaît ou n'apparaît pas.
+ */
+@Composable
+private fun LoadingRow(accent: Color) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(14.dp), color = accent, strokeWidth = 2.dp)
+        Text(
+            text = "Comparaison de la semaine écoulée à vos huit dernières semaines…",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
