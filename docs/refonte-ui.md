@@ -381,6 +381,11 @@ Il leur manque une seconde phrase, qui dit ce que **vos** données montrent :
 - Corps : « −2,4 kg sur la période, dont −0,3 kg de muscle. »
 - Vitalité : « Le stress dépasse 60 pendant 18 % du temps, avec un pic vers 15 h. »
 
+Deux fautes relevées en les écrivant, et qu'un texte rédigé à la main laisse passer sans
+bruit : l'intervalle p10–p90 couvre **huit** jours sur dix, pas neuf ; et la dispersion du
+coucher s'écrivait « ±1,8 h » juste sous un indicateur affichant « ±1h46 » — même grandeur,
+deux formats sur le même écran.
+
 **Ces phrases sont calculées dans `report-sections.js` à partir de `ReportModel`. Le LLM
 ne les écrit pas et ne les voit pas.** C'est la même règle que le catalogue de séries : le
 modèle désigne, il ne recopie pas de chiffre, donc il ne peut pas en inventer un. Une
@@ -611,13 +616,33 @@ installé et lancé, les trois onglets, l'icône de réglages et l'import parcou
 plantage ; l'écran relu deux fois sur l'appareil, une fois avec des valeurs d'essai et une
 fois avec les vraies mesures — c'est la seconde qui a révélé les deux défauts ci-dessus.
 
-### Phase 3 — La hiérarchie du rapport
+### Phase 3 — La hiérarchie du rapport — **livrée en partie**
 
-Essentiel et détail, deux chiffres de tête, phrases de lecture calculées, reprise du
-moteur de graphiques.
+Livré : essentiel et détail, deux chiffres de tête, phrases de lecture calculées, et les
+tableaux de tension et d'ECG qui remontent d'eux-mêmes dès qu'ils portent une ligne.
 
-Vérification : parité `ReportModel` entre Kotlin et JavaScript ; `chart-spec-smoke.html` ;
-les phrases rendent `null` sur données manquantes ; impression en niveaux de gris.
+**Non livré : la reprise du moteur de graphiques** (§ 5.4) — axes, grille, dernier point
+marqué, bandes cibles étiquetées, infobulle au toucher, doublage des couleurs pour le noir
+et blanc. C'est un chantier à part entière, et le séparer garde chaque livraison
+vérifiable seule.
+
+Trois décisions prises en cours de route :
+
+1. **Le détail est dessiné à la première ouverture, pas avant.** Un SVG construit dans un
+   conteneur masqué sort à zéro pixel de large. La première version appelait `redraw()`
+   après coup, ce qui reconstruisait le rapport entier et refermait le bloc dans la foulée.
+2. **Le bloc replié n'est pas un `<details>`.** Le contenu d'un `<details>` fermé ne
+   s'imprime pas, et le rapport imprimé doit être complet — c'est son usage principal.
+   Une classe et un bouton se laissent forcer ouverts par une règle d'impression, ce
+   qu'aucune CSS ne sait faire sur un `<details>`.
+3. **Un seul écouteur d'impression pour toute la page.** Un écouteur par bloc aurait
+   survécu à chaque redessin en retenant des nœuds détachés.
+
+Vérifié : 158 tests JS, 486 tests Kotlin, 0 échec ; les deux garde-fous existants de
+l'onglet « Tout » sont passés au rouge en comptant 19 graphiques là où il n'y en a plus
+que 9 avant dépliage — recentrés sur le nouveau contrat, et complétés par le test qui
+manquait ; la promesse « rien ne disparaît » cassée exprès pour vérifier que le test la
+défend ; dépliage essayé au doigt dans la WebView Android ; APK publié installé et lancé.
 
 ### Phase 4 — L'export médecin
 
