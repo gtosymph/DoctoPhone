@@ -31,7 +31,7 @@ Ces douze points sont arbitrés. Le reste du document les développe.
 
 ## 1. Le constat
 
-Sept défauts, tous vérifiés dans le code.
+Huit défauts, tous vérifiés dans le code.
 
 ### 1.1 Deux systèmes de design cohabitent dans le même écran
 
@@ -81,7 +81,20 @@ celle de toutes les autres applications de l'appareil.
 Le rapport montre « Calcul du rapport… ». L'analyse montre un état en ligne. L'import
 montre une barre. Aucun de ces états ne dit combien de temps il reste, ni ce qui se passe.
 
-### 1.7 Deux incohérences mineures, à corriger au passage
+### 1.7 Trois couleurs de texte sous le seuil de lisibilité
+
+Mesuré, pas supposé. `--warning`, `--serious` et `--critical` servent de **couleur de
+texte** (`.ha-pill`, `.report-inline-status`) et n'étaient redéfinis dans aucun des deux
+blocs sombres : ils héritaient donc de valeurs calculées pour du papier.
+
+| Jeton | Thème | Contraste mesuré | Seuil |
+|---|---|---|---|
+| `--warning` | clair | **1,74:1** | 4,5:1 |
+| `--serious` | clair | **2,50:1** | 4,5:1 |
+| `--critical` | sombre | **3,62:1** | 4,5:1 |
+| `--muted` | clair | **3,41:1** | 4,5:1 |
+
+### 1.8 Deux incohérences mineures, à corriger au passage
 
 - `ui/home/TimeRange.kt` propose 7, 30, 90 et 365 jours. La version web propose en plus
   « Tout l'historique ». Les deux doivent proposer la même chose.
@@ -171,13 +184,23 @@ Conséquences, à tenir :
 1. **Web et WebView** : les fichiers vivent dans `web/report/fonts/`, appelés par
    `@font-face` en chemin relatif. Aucun changement de build n'est nécessaire : la tâche
    Gradle `Sync` de `app/build.gradle.kts` copie déjà `web/report/` en entier vers
-   `app/src/main/assets/`.
-2. **Android natif** : les mêmes familles en `.ttf` variable dans `app/src/main/res/font`.
-   Réduites au sous-ensemble latin, environ 160 Ko au total dans l'APK.
+   `app/src/main/assets/`. **74 Ko** pour les quatre fontes en woff2.
+2. **Android natif** : les mêmes familles en `.ttf` dans `app/src/main/res/font`.
+   **194 Ko** au total dans l'APK.
 3. **Rapport exporté** : les polices doivent entrer en `data:` base64 dans le fichier, sinon
-   il retombe sur la police système. Pour limiter le poids, **seule la serif est
-   embarquée** (environ 60 Ko, 80 Ko une fois en base64) ; le texte courant utilise une
-   pile système. Le titre porte l'identité, le corps n'en a pas besoin sur papier.
+   il retombe sur la police système. **Seule la serif en 600 est embarquée**, soit
+   **31 Ko** ; le texte courant utilise une pile système. Le titre porte l'identité, le
+   corps n'en a pas besoin sur papier.
+
+**Des instances statiques, pas les fontes variables.** Mesuré : deux graisses de chaque
+famille pèsent 74 Ko en woff2, contre 162 Ko pour les deux fontes variables. L'axe optique
+de Source Serif 4 est figé à 20, ce qui couvre la plage de corps réellement utilisée.
+Corollaire : chaque famille n'existe qu'en 400 et 600, et demander une graisse
+intermédiaire ferait synthétiser des contours épaissis, visiblement plus sales. Un test le
+vérifie sur la feuille de style.
+
+Une mesure a confirmé le choix d'embarquer la seule graisse 600 dans l'export : sur le
+rapport rendu, la serif 400 reste à l'état `unloaded`, aucun élément ne la demande.
 
 Échelle typographique, commune aux deux versions :
 
@@ -550,13 +573,20 @@ Ces garde-fous survivent à la refonte. Ils sont détaillés dans `CLAUDE.md`.
 
 Cinq phases. Chacune se vérifie seule et peut être publiée seule.
 
-### Phase 1 — Le système visuel
+### Phase 1 — Le système visuel — **livrée**
 
-Palette unifiée, typographie embarquée, échelle typographique, rythme vertical. Aucun
+Palette unifiée, typographie embarquée, échelle typographique, contrastes corrigés. Aucun
 changement de fonction.
 
-Vérification : les captures avant/après de chaque écran existant ; le test de parité des
-jetons ; les trois états de thème ; le lancement de l'app.
+Ce qui a été fait, en plus du prévu : les trois contrastes du § 1.7 ; le remplacement des
+polices dans le rapport exporté, qui les appelait par un chemin relatif inexistant dans un
+fichier autonome ; et `DriftSection`, qui disparaissait pendant son calcul.
+
+Vérifié : `ThemeTokenParityTest` relit `report.css` et compare jeton par jeton, cassé
+exprès des deux façons pour s'assurer qu'il sait échouer ; 464 tests, 0 échec ; APK
+installé et lancé sur émulateur, palette relevée au pixel (`#f9f9f7` et `#e1e0d9`
+exactement), aucun plantage ; export ouvert depuis un blob — donc sans dossier voisin — et
+sa serif s'y charge.
 
 ### Phase 2 — La navigation et « Cette semaine »
 
@@ -594,8 +624,9 @@ Vérification : chaque état du tableau § 8 atteint au moins une fois ; contras
 1. **La paire de polices.** Source Serif 4 et Public Sans sont un choix sobre. Une serif
    plus marquée (Fraunces) donnerait davantage de caractère, au risque du maniérisme sur un
    document médical.
-2. **Le poids du rapport exporté.** Embarquer la serif en base64 ajoute environ 80 Ko à
-   chaque export. L'alternative est une pile système, donc aucune identité sur papier.
+2. ~~**Le poids du rapport exporté.**~~ Tranchée par la mesure : la serif 600 seule pèse
+   31 Ko en base64, pas 80. Le coût est assez faible pour ne plus poser question, et
+   l'option est en place.
 3. **L'onglet « Tout » du rapport.** Il répète le contenu de tous les autres. Il reste
    utile pour chercher dans la page ; il double la longueur du document.
 4. **Les couleurs de domaine sur l'écran d'accueil.** La charte actuelle les réserve aux
