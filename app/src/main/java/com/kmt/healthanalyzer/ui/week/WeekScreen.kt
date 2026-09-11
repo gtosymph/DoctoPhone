@@ -105,7 +105,12 @@ fun WeekScreen(
             }
         }
 
-        DataFootnote(state = state, onRefresh = viewModel::refresh)
+        // Rien à dire de la couverture quand il n'y a aucune donnée : le bandeau au-dessus
+        // porte déjà le seul geste utile, et « Période couverte inconnue » n'ajoute qu'un
+        // constat redondant sous une invitation à importer.
+        if (state.hasAnyData) {
+            DataFootnote(state = state, onRefresh = viewModel::refresh)
+        }
     }
 }
 
