@@ -469,7 +469,7 @@ chiffres mesurés et des phrases calculées.
 
 Trois onglets : **Cette semaine**, **Rapport**, **Analyse**.
 
-- L'écran de départ devient `CetteSemaineScreen`.
+- L'écran de départ devient `WeekScreen`.
 - `ImportScreen` perd son onglet et se rejoint depuis les Réglages, ou depuis le bandeau de
   premier usage de l'accueil.
 - `SettingsScreen` perd son onglet et se rejoint par une icône en haut à droite de chaque
@@ -588,12 +588,28 @@ installé et lancé sur émulateur, palette relevée au pixel (`#f9f9f7` et `#e1
 exactement), aucun plantage ; export ouvert depuis un blob — donc sans dossier voisin — et
 sa serif s'y charge.
 
-### Phase 2 — La navigation et « Cette semaine »
+### Phase 2 — La navigation et « Cette semaine » — **livrée**
 
 Trois onglets, Réglages sous icône, import déplacé, nouvel écran d'accueil.
 
-Vérification : tests de `CetteSemaineViewModel` sur les trois états du bloc de dérives ;
-lancement de l'app ; aucun écran devenu inaccessible.
+Deux décisions prises en cours de route, et toutes deux nées d'un regard sur l'écran avec
+de vraies mesures :
+
+1. **Montrer une valeur et affirmer une dérive ont des seuils distincts.** L'archive
+   importée s'arrêtait quelques jours avant la date du jour ; les six lignes affichaient un
+   tiret sous une référence bien remplie, et l'écran donnait à lire « aucune donnée » là où
+   l'information était « il manque les derniers jours ». Décrire une semaine demande moins
+   de preuves qu'affirmer un changement : les seuils d'affichage sont plus bas, et le
+   nombre de jours mesurés s'affiche à côté de la valeur.
+2. **Le poids est la seule mesure éparse.** On se pèse une ou deux fois par semaine. Lui
+   appliquer le seuil des mesures quotidiennes affichait un tiret presque toujours. Une
+   seule pesée suffit désormais à dire le poids de la semaine ; les seuils de détection,
+   eux, n'ont pas bougé.
+
+Vérifié : 486 tests, 0 échec, dont 20 sur le bilan hebdomadaire et son ViewModel ; APK
+installé et lancé, les trois onglets, l'icône de réglages et l'import parcourus sans
+plantage ; l'écran relu deux fois sur l'appareil, une fois avec des valeurs d'essai et une
+fois avec les vraies mesures — c'est la seconde qui a révélé les deux défauts ci-dessus.
 
 ### Phase 3 — La hiérarchie du rapport
 
