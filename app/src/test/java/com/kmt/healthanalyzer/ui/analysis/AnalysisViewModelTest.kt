@@ -16,7 +16,10 @@ import com.kmt.healthanalyzer.domain.report.ReportModel
 import com.kmt.healthanalyzer.domain.report.SleepSection
 import com.kmt.healthanalyzer.domain.report.StressSection
 import com.kmt.healthanalyzer.domain.usecase.ChatContext
+import com.kmt.healthanalyzer.data.llm.LlmError
 import com.kmt.healthanalyzer.domain.usecase.ChatResult
+import com.kmt.healthanalyzer.ui.state.StateAction
+import com.kmt.healthanalyzer.ui.state.StateCopy
 import com.kmt.healthanalyzer.domain.usecase.ChatTurn
 import com.kmt.healthanalyzer.domain.usecase.ChatWithHealthUseCase
 import io.mockk.coEvery
@@ -32,6 +35,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import kotlinx.coroutines.awaitCancellation
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -128,7 +133,9 @@ class AnalysisViewModelTest {
         val state = viewModel.state.value
         assertTrue(!state.isLoadingContext)
         requireNotNull(state.errorMessage)
-        assertTrue(state.errorMessage!!.contains("base illisible"))
+        // La cause technique reste au journal ; l'écran, lui, propose un geste.
+        assertFalse(state.errorMessage!!.contains("base illisible"))
+        assertEquals(StateAction.RETRY, state.errorAction)
     }
 
     @Test
@@ -142,7 +149,8 @@ class AnalysisViewModelTest {
         val state = viewModel.state.value
         assertTrue(!state.isLoadingContext)
         requireNotNull(state.errorMessage)
-        assertTrue(state.errorMessage!!.contains("rapport illisible"))
+        assertFalse(state.errorMessage!!.contains("rapport illisible"))
+        assertEquals(StateAction.RETRY, state.errorAction)
     }
 
     @Test
@@ -270,8 +278,7 @@ class AnalysisViewModelTest {
     @Test
     fun `un echec du modele garde la question deja envoyee et affiche le message d'erreur`() = runTest(dispatcher) {
         coEvery { chatMessageDao.insert(any()) } returns 1L
-        coEvery { chatWithHealth(any(), any()) } returns
-            ChatResult.Failure("Aucune clé API n'est enregistrée pour Claude (Anthropic).")
+        coEvery { chatWithHealth(any(), any()) } returns ChatResult.Failure(LlmError.MissingApiKey())
 
         val viewModel = newViewModel()
         viewModel.onScreenVisible()
@@ -283,7 +290,10 @@ class AnalysisViewModelTest {
 
         val state = viewModel.state.value
         assertTrue(!state.isSending)
-        assertEquals("Aucune clé API n'est enregistrée pour Claude (Anthropic).", state.errorMessage)
+        // L'écran ne reprend pas le message de l'exception : il montre la phrase de
+        // `StateCopy`, la seule qui dise aussi où vit la clé et quel bouton la mène là.
+        assertEquals(StateCopy.MISSING_API_KEY, state.errorMessage)
+        assertEquals(StateAction.OPEN_SETTINGS, state.errorAction)
         assertEquals(1, state.messages.size)
         assertEquals(ChatRole.USER, state.messages[0].role)
     }
@@ -333,4 +343,46 @@ class AnalysisViewModelTest {
             correlations = emptyList(),
         )
     }
+
+    @Test
+    fun `annuler un envoi rend la main et garde la question posee`() = runTest(dispatcher) {
+        coEvery { chatMessageDao.insert(any()) } returns 1L
+        // Un appel qui ne rend jamais : c'est exactement la situation où l'on veut
+        // pouvoir renoncer — un fournisseur lent, un réseau qui traîne.
+        coEvery { chatWithHealth(any(), any()) } coAnswers { awaitCancellation() }
+
+        val viewModel = newViewModel()
+        viewModel.onScreenVisible()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.setDraft("Comment je dors ?")
+        viewModel.send()
+        dispatcher.scheduler.runCurrent()
+        assertTrue("l'envoi doit être en cours avant d'être annulé", viewModel.state.value.isSending)
+
+        viewModel.cancelSend()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertFalse("l'écran reste bloqué sur « Analyse en cours… »", state.isSending)
+        assertNull("renoncer n'est pas un échec : aucun message d'erreur", state.errorMessage)
+        // La question a bien eu lieu, elle est en base : l'effacer donnerait le sentiment
+        // que l'app a perdu ce qu'on venait d'écrire.
+        assertEquals(1, state.messages.size)
+        assertEquals(ChatRole.USER, state.messages[0].role)
+    }
+
+    @Test
+    fun `annuler sans envoi en cours ne fait rien`() = runTest(dispatcher) {
+        val viewModel = newViewModel()
+        viewModel.onScreenVisible()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.cancelSend()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isSending)
+        assertNull(viewModel.state.value.errorMessage)
+    }
+
 }

@@ -2503,6 +2503,222 @@
     assert(chiffres.length > 0, 'aucun stade n\'est étiqueté dans sa barre');
   });
 
+  // ======================================================================
+  // Le mouvement (§ 9 des specs)
+  //
+  // Sobre et utile : il sert à montrer une relation, jamais à remplir un silence. Ces
+  // tests tiennent les quatre règles, et surtout la dernière — `prefers-reduced-motion`
+  // coupe tout, sans exception.
+  // ======================================================================
+
+  /** Lit le texte de `report.css` tel que le navigateur l'a chargé. */
+  function reportCss() {
+    for (const sheet of document.styleSheets) {
+      if (!/report\.css$/.test(sheet.href || '')) continue;
+      return Array.from(sheet.cssRules).map(r => r.cssText).join('\n');
+    }
+    return null;
+  }
+
+  test('une courbe ne se trace qu\'à sa première apparition, jamais au redessin', () => {
+    // Le mouvement montre le sens de lecture, de gauche à droite. Le rejouer à chaque
+    // bascule de thème ou à chaque redimensionnement le transforme en tic.
+    const model = HA.smokeFixture.build();
+    HA.engine.forgetDrawnCharts();
+
+    const premier = document.createElement('div');
+    premier.className = 'ha-chart';
+    HA.reportCharts['sleep-nightly'](premier, model);
+    assert(premier.querySelector('.ha-enter'),
+      'la première apparition doit porter la classe d\'entrée');
+
+    const second = document.createElement('div');
+    second.className = 'ha-chart';
+    HA.reportCharts['sleep-nightly'](second, model);
+    assert(!second.querySelector('.ha-enter'),
+      'un redessin du même graphique ne rejoue pas son entrée');
+  });
+
+  test('prefers-reduced-motion coupe toute animation et toute transition', () => {
+    const css = reportCss();
+    if (!css) return; // feuille non chargée : rien à vérifier, rien à prouver.
+
+    const bloc = css.split('@media (prefers-reduced-motion: reduce)')[1];
+    assert(bloc, 'la feuille ne porte aucun bloc prefers-reduced-motion');
+
+    const debut = bloc.indexOf('{');
+    const regle = bloc.slice(debut, debut + 600);
+    // Le navigateur développe `animation: none` en sa forme longue
+    // (`auto ease 0s 1 normal none running none`) : c'est le nom d'animation, en
+    // dernier, qui vaut `none`. On vérifie donc la propriété et son `!important`,
+    // pas la chaîne telle qu'on l'a écrite.
+    assert(/animation:[^;]*none[^;]*!important/.test(regle), 'le bloc ne coupe pas les animations');
+    assert(/transition:\s*none\s*!important/.test(regle), 'le bloc ne coupe pas les transitions');
+    assert(/\*/.test(regle), 'la coupure doit porter sur tout, sans exception');
+  });
+
+  test('le changement d\'onglet est un fondu, sans glissement latéral', () => {
+    const css = reportCss();
+    if (!css) return;
+
+    const regles = css.split('\n').filter(r => r.includes('ha-tabpanel'));
+    const animation = regles.find(r => /animation/.test(r));
+    assert(animation, 'aucun fondu déclaré sur un panneau d\'onglet');
+    assert(!/translate/i.test(animation),
+      'un glissement latéral suggère une position dans une liste ; les onglets n\'en ont pas');
+  });
+
+  test('le dépliage anime sa hauteur puis la relâche ; le repli est immédiat', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    HA.report.renderReport(host, HA.smokeFixture.build());
+
+    const bouton = host.querySelector('.ha-detail-toggle');
+    const corps = bouton.parentElement.querySelector('.ha-detail-body');
+    assert(corps.hidden, 'le détail commence replié');
+
+    // L'état lu par un lecteur d'écran change dès le clic, sans attendre le mouvement.
+    bouton.click();
+    assert(!corps.hidden, 'le détail doit s\'ouvrir dès le clic');
+    assertEqual(bouton.getAttribute('aria-expanded'), 'true');
+
+    // La hauteur est relâchée à la fin du mouvement. La garder figerait le bloc, et un
+    // graphique qui se redessine plus haut déborderait sous un couvercle.
+    await new Promise(r => setTimeout(r, 320));
+    assertEqual(corps.style.height, '', 'aucune hauteur ne doit rester posée');
+    assert(!corps.hidden, 'le bloc reste ouvert après le mouvement');
+
+    // Le repli, lui, est immédiat et synchrone : pas d'état intermédiaire où le contenu
+    // serait encore annoncé alors qu'on vient de le refermer.
+    bouton.click();
+    assert(corps.hidden, 'le repli doit être immédiat');
+    assertEqual(corps.style.height, '');
+    assertEqual(bouton.getAttribute('aria-expanded'), 'false');
+
+    host.remove();
+  });
+
+  test('aucun chiffre du rapport ne défile vers sa valeur', () => {
+    // Un compteur qui grimpe est un effet de démonstration ; sur une mesure de santé, il
+    // se lit comme une donnée instable. Rien dans le moteur ne doit savoir le faire.
+    const interdits = ['countUp', 'animateNumber', 'tween', 'requestAnimationFrame'];
+    const sources = [HA.engine, HA.report, HA.reportSections].filter(Boolean);
+    for (const source of sources) {
+      for (const cle of Object.keys(source)) {
+        const valeur = source[cle];
+        if (typeof valeur !== 'function') continue;
+        const texte = String(valeur);
+        for (const interdit of interdits) {
+          assert(!texte.includes(interdit),
+            `${cle} contient « ${interdit} » : un chiffre ne doit jamais défiler`);
+        }
+      }
+    }
+  });
+
+  // ======================================================================
+  // L'accessibilité (§ 10 des specs)
+  // ======================================================================
+
+  test('chaque graphique porte une description lisible par un lecteur d\'écran', () => {
+    // Un `role="img"` sans texte est une image muette : le lecteur d'écran annonce
+    // « graphique » et s'arrête là. Le titre donne le sujet, la description donne ce
+    // qu'on aurait lu sur les axes.
+    const model = HA.smokeFixture.build();
+    for (const key of Object.keys(HA.reportCharts)) {
+      const host = document.createElement('div');
+      host.className = 'ha-chart';
+      document.body.appendChild(host);
+      HA.reportCharts[key](host, model);
+      const svg = host.querySelector('svg[role="img"]');
+      host.remove();
+      if (!svg) continue;
+
+      const titre = svg.querySelector('title');
+      assert(titre && titre.textContent.trim(), key + ' : aucun titre');
+      const desc = svg.querySelector('desc');
+      assert(desc && desc.textContent.trim().length > 10,
+        key + ' : aucune description, ou une description vide');
+    }
+  });
+
+  test('la description d\'un graphique nomme l\'étendue de son axe', () => {
+    const model = HA.smokeFixture.build();
+    const host = document.createElement('div');
+    host.className = 'ha-chart';
+    document.body.appendChild(host);
+    HA.reportCharts['sleep-nightly'](host, model);
+    const desc = host.querySelector('svg[role="img"] desc').textContent;
+    host.remove();
+
+    assert(/0h/.test(desc) && /10h/.test(desc),
+      'la description doit citer les bornes de l\'axe, comme les lit un œil : ' + desc);
+    assert(/dernière/i.test(desc),
+      'la description doit citer la dernière valeur, celle que l\'œil cherche : ' + desc);
+  });
+
+  test('le titre et la description sont reliés au graphique par aria-labelledby', () => {
+    // Sans ce lien, les lecteurs d'écran les ignorent sur un SVG en ligne.
+    const model = HA.smokeFixture.build();
+    const host = document.createElement('div');
+    host.className = 'ha-chart';
+    document.body.appendChild(host);
+    HA.reportCharts['activity-steps'](host, model);
+    const svg = host.querySelector('svg[role="img"]');
+    const lien = (svg.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean);
+    host.remove();
+
+    assertEqual(lien.length, 2, 'le titre et la description doivent être cités tous les deux');
+    for (const id of lien) {
+      assert(document.getElementById(id) || svg.querySelector('#' + CSS.escape(id)),
+        'l\'identifiant ' + id + ' ne désigne rien');
+    }
+  });
+
+  test('les identifiants de description sont uniques dans une page', () => {
+    // Deux graphiques d'un même rapport partageant un identifiant, le lecteur d'écran
+    // annoncerait la même description pour les deux.
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    HA.report.renderReport(host, HA.smokeFixture.build());
+    const ids = [...host.querySelectorAll('svg[role="img"] title, svg[role="img"] desc')]
+      .map(n => n.id)
+      .filter(Boolean);
+    host.remove();
+
+    assert(ids.length > 10, 'trop peu d\'identifiants relevés : ' + ids.length);
+    assertEqual(new Set(ids).size, ids.length, 'deux éléments partagent le même identifiant');
+  });
+
+  test('les commandes du rapport montrent leur focus clavier', () => {
+    const css = reportCss();
+    if (!css) return;
+
+    for (const selecteur of ['.ha-tab', '.ha-detail-toggle']) {
+      const regle = css.split('\n').find(r => r.includes(selecteur) && r.includes(':focus-visible'));
+      assert(regle, selecteur + ' n\'a aucune règle :focus-visible');
+      assert(/outline/.test(regle) && !/outline:\s*none/.test(regle),
+        selecteur + ' : le focus doit dessiner un contour visible');
+    }
+  });
+
+  test('les commandes du rapport atteignent la cible tactile minimale', () => {
+    // 44 pixels CSS dans la WebView, ce qui correspond aux 48 dp de la coquille native
+    // sur un écran de densité courante. En dessous, la commande se rate au doigt.
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    HA.report.renderReport(host, HA.smokeFixture.build());
+
+    const commandes = [...host.querySelectorAll('.ha-tab, .ha-detail-toggle')];
+    assert(commandes.length > 3, 'trop peu de commandes relevées');
+    for (const commande of commandes) {
+      const min = parseFloat(getComputedStyle(commande).minHeight);
+      assert(min >= 44,
+        '« ' + commande.textContent.trim() + ' » n\'a qu\'une hauteur minimale de ' + min + ' px');
+    }
+    host.remove();
+  });
+
   async function runAll() {
     for (const { name, fn } of registered) {
       try {

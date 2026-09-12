@@ -74,6 +74,13 @@ fun HealthAnalyzerNavHost() {
             val backStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = backStackEntry?.destination
 
+            /*
+             * `NavigationBar` garde sa hauteur de 80 dp, y compris à 200 % de taille de
+             * police système. Essayé : un `Modifier.height` posé dessus ne change rien,
+             * la rangée interne fixe sa propre hauteur. À 200 %, « Cette semaine » passe
+             * donc sur deux lignes et s'approche du bord — mais reste entière, ce qui
+             * est la seule chose que les specs interdisent de perdre.
+             */
             NavigationBar {
                 HealthDestination.entries.forEach { destination ->
                     val selected = currentRoute?.hierarchy?.any { it.route == destination.route } == true
@@ -114,7 +121,12 @@ fun HealthAnalyzerNavHost() {
                     onOpenImport = { navController.switchTo(ROUTE_IMPORT) },
                 )
             }
-            composable(HealthDestination.REPORT.route) { ReportScreen(modifier = screenModifier) }
+            composable(HealthDestination.REPORT.route) {
+                ReportScreen(
+                    modifier = screenModifier,
+                    onOpenSettings = { navController.switchTo(ROUTE_SETTINGS) },
+                )
+            }
             composable(HealthDestination.ANALYSIS.route) {
                 AnalysisScreen(
                     modifier = screenModifier,

@@ -12,6 +12,8 @@ import com.kmt.healthanalyzer.domain.usecase.AnalyzeReportNarrativeUseCase
 import com.kmt.healthanalyzer.domain.usecase.NarrativeResult
 import com.kmt.healthanalyzer.domain.usecase.ReviewWeekUseCase
 import com.kmt.healthanalyzer.ui.home.TimeRange
+import com.kmt.healthanalyzer.ui.state.StateAction
+import com.kmt.healthanalyzer.ui.state.StateCopy
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CancellationException
@@ -42,10 +44,21 @@ data class ReportUiState(
     val range: TimeRange = TimeRange.MONTH,
     val reportJson: String? = null,
     val errorMessage: String? = null,
+    /** Le geste proposé sous [errorMessage]. Voir `StateCopy`. */
+    val errorAction: StateAction = StateAction.NONE,
+    /**
+     * Le nombre de jours que le calcul en cours traite.
+     *
+     * Sert à écrire « Calcul du rapport sur 294 jours… ». Une attente muette ne se
+     * distingue pas d'un blocage ; celle-ci dit sur quoi elle porte.
+     */
+    val loadingDays: Int = 0,
     val isExporting: Boolean = false,
     val exportError: String? = null,
     val isWritingNarrative: Boolean = false,
     val narrativeError: String? = null,
+    /** Le geste proposé sous [narrativeError]. */
+    val narrativeErrorAction: StateAction = StateAction.NONE,
     val narrativeRange: TimeRange? = null,
 )
 
@@ -97,7 +110,14 @@ class ReportViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             val requestedRange = _state.value.range
-            _state.update { it.copy(isLoading = true, errorMessage = null) }
+            _state.update {
+                it.copy(
+                    isLoading = true,
+                    errorMessage = null,
+                    errorAction = StateAction.NONE,
+                    loadingDays = requestedRange.days.toInt(),
+                )
+            }
             try {
                 val span = dateRange(requestedRange, LocalDate.now(zone))
                 val builtModel = repository.buildReport(span, zone)
@@ -115,10 +135,8 @@ class ReportViewModel @Inject constructor(
                 }
             } catch (failure: Exception) {
                 _state.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = "La construction du rapport a échoué : ${failure.message ?: "cause inconnue"}",
-                    )
+                    val copy = StateCopy.forFailure(failure)
+                    it.copy(isLoading = false, errorMessage = copy.message, errorAction = copy.action)
                 }
             }
         }
@@ -218,7 +236,14 @@ class ReportViewModel @Inject constructor(
                     }
                 }
                 is NarrativeResult.Failure -> {
-                    _state.update { it.copy(isWritingNarrative = false, narrativeError = result.message) }
+                    val copy = StateCopy.forFailure(result.cause)
+                    _state.update {
+                        it.copy(
+                            isWritingNarrative = false,
+                            narrativeError = copy.message,
+                            narrativeErrorAction = copy.action,
+                        )
+                    }
                 }
             }
         }

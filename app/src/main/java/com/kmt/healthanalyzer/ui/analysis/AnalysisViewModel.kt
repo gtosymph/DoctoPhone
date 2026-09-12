@@ -9,11 +9,14 @@ import com.kmt.healthanalyzer.data.preferences.AppPreferences
 import com.kmt.healthanalyzer.data.repository.HealthRepository
 import com.kmt.healthanalyzer.domain.usecase.ChatContext
 import com.kmt.healthanalyzer.domain.usecase.ChatResult
+import com.kmt.healthanalyzer.ui.state.StateAction
+import com.kmt.healthanalyzer.ui.state.StateCopy
 import com.kmt.healthanalyzer.domain.usecase.ChatTurn
 import com.kmt.healthanalyzer.domain.usecase.ChatWithHealthUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Instant
 import javax.inject.Inject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,6 +54,8 @@ data class ChatUiState(
     val isRefreshingContext: Boolean = false,
     val isSending: Boolean = false,
     val errorMessage: String? = null,
+    /** Le geste que l'écran propose sous le message d'échec. Voir `StateCopy`. */
+    val errorAction: StateAction = StateAction.NONE,
     val providerName: String = "",
 )
 
@@ -90,6 +95,15 @@ class AnalysisViewModel @Inject constructor(
 
     private var historyLoaded = false
 
+    /**
+     * L'envoi en cours, gardé pour pouvoir y renoncer.
+     *
+     * Un appel au fournisseur peut prendre une demi-minute, parfois davantage. Sans ce
+     * fil, la seule sortie serait de quitter l'écran, ce qui laisse l'appel courir et la
+     * réponse arriver dans le vide.
+     */
+    private var sendJob: Job? = null
+
     init {
         viewModelScope.launch {
             val settings = preferences.settings.first()
@@ -119,7 +133,8 @@ class AnalysisViewModel @Inject constructor(
                 _state.update {
                     it.copy(
                         isLoadingContext = false,
-                        errorMessage = "Le chargement de la conversation a échoué : ${failure.message ?: "cause inconnue"}",
+                        errorMessage = StateCopy.forFailure(failure).message,
+                        errorAction = StateCopy.forFailure(failure).action,
                     )
                 }
                 return@launch
@@ -146,6 +161,7 @@ class AnalysisViewModel @Inject constructor(
                         isLoadingContext = false,
                         isRefreshingContext = false,
                         errorMessage = null,
+                        errorAction = StateAction.NONE,
                     )
                 }
             } catch (failure: Exception) {
@@ -153,7 +169,8 @@ class AnalysisViewModel @Inject constructor(
                     it.copy(
                         isLoadingContext = false,
                         isRefreshingContext = false,
-                        errorMessage = "Le chargement du contexte de santé a échoué : ${failure.message ?: "cause inconnue"}",
+                        errorMessage = StateCopy.forFailure(failure).message,
+                        errorAction = StateCopy.forFailure(failure).action,
                     )
                 }
             }
@@ -180,13 +197,18 @@ class AnalysisViewModel @Inject constructor(
         val context = currentContext
         if (context == null) {
             _state.update {
-                it.copy(errorMessage = "Le contexte de santé n'est pas encore prêt. Réessayez dans un instant.")
+                it.copy(
+                    errorMessage = "Vos données ne sont pas encore prêtes. Réessayez dans un instant.",
+                    errorAction = StateAction.RETRY,
+                )
             }
             return
         }
 
-        viewModelScope.launch {
-            _state.update { it.copy(isSending = true, errorMessage = null, draft = "") }
+        sendJob = viewModelScope.launch {
+            _state.update {
+                it.copy(isSending = true, errorMessage = null, errorAction = StateAction.NONE, draft = "")
+            }
 
             val userMessage = ChatMessageEntity(
                 role = ChatRole.USER,
@@ -223,9 +245,27 @@ class AnalysisViewModel @Inject constructor(
                     }
                 }
                 is ChatResult.Failure -> {
-                    _state.update { it.copy(isSending = false, errorMessage = result.message) }
+                    val copy = StateCopy.forFailure(result.cause)
+                    _state.update {
+                        it.copy(isSending = false, errorMessage = copy.message, errorAction = copy.action)
+                    }
                 }
             }
+        }
+    }
+
+    /**
+     * Renonce à l'envoi en cours.
+     *
+     * La question déjà écrite en base reste : elle a bien été posée, et l'effacer donnerait
+     * le sentiment que l'app a perdu ce qu'on venait de taper. Renoncer n'est pas un échec,
+     * donc aucun message d'erreur ne s'affiche — l'écran revient simplement à son repos.
+     */
+    fun cancelSend() {
+        sendJob?.cancel()
+        sendJob = null
+        if (_state.value.isSending) {
+            _state.update { it.copy(isSending = false) }
         }
     }
 
@@ -233,7 +273,7 @@ class AnalysisViewModel @Inject constructor(
     fun clearConversation() {
         viewModelScope.launch {
             chatMessageDao.deleteAll()
-            _state.update { it.copy(messages = emptyList(), errorMessage = null) }
+            _state.update { it.copy(messages = emptyList(), errorMessage = null, errorAction = StateAction.NONE) }
         }
     }
 }

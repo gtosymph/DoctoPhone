@@ -1,5 +1,6 @@
 package com.kmt.healthanalyzer.data.repository
 
+import com.kmt.healthanalyzer.ui.state.StateCopy
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -67,8 +68,7 @@ data class HealthConnectSyncResult(
         }
 
         val historyWarning = if (historyPermissionMissing) {
-            " L'historique au-delà de 30 jours n'est pas accessible : la permission d'historique " +
-                "Health Connect manque. Réautorisez l'app en cochant toutes les permissions demandées."
+            " " + StateCopy.HISTORY_PERMISSION_MISSING
         } else {
             ""
         }

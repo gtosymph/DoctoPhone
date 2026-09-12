@@ -13,7 +13,10 @@ import com.kmt.healthanalyzer.domain.report.ReportNarrative
 import com.kmt.healthanalyzer.domain.report.SleepSection
 import com.kmt.healthanalyzer.domain.report.StressSection
 import com.kmt.healthanalyzer.domain.usecase.AnalyzeReportNarrativeUseCase
+import com.kmt.healthanalyzer.data.llm.LlmError
 import com.kmt.healthanalyzer.domain.usecase.NarrativeResult
+import com.kmt.healthanalyzer.ui.state.StateAction
+import com.kmt.healthanalyzer.ui.state.StateCopy
 import com.kmt.healthanalyzer.domain.usecase.ReviewWeekUseCase
 import com.kmt.healthanalyzer.ui.home.TimeRange
 import io.mockk.coEvery
@@ -31,6 +34,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -106,7 +110,11 @@ class ReportViewModelTest {
         assertTrue(!state.isLoading)
         assertNull(state.reportJson)
         requireNotNull(state.errorMessage)
-        assertTrue(state.errorMessage!!.contains("base illisible"))
+        // Le message de l'exception ne traverse plus. « base illisible » ne dit rien à
+        // qui lit son rapport ; la phrase de `StateCopy` propose un geste, et le bouton
+        // qui l'accompagne le rend cliquable.
+        assertFalse(state.errorMessage!!.contains("base illisible"))
+        assertEquals(StateAction.RETRY, state.errorAction)
     }
 
     @Test
@@ -169,8 +177,7 @@ class ReportViewModelTest {
     @Test
     fun `un échec du récit se traduit en message d'erreur lisible, sans toucher au JSON`() = runTest(dispatcher) {
         coEvery { repository.buildReport(any(), any()) } returns minimalReport()
-        coEvery { analyzeNarrative(any()) } returns
-            NarrativeResult.Failure("Aucune clé API n'est enregistrée pour OpenAI.")
+        coEvery { analyzeNarrative(any()) } returns NarrativeResult.Failure(LlmError.MissingApiKey())
 
         val viewModel = newViewModel()
         dispatcher.scheduler.advanceUntilIdle()
@@ -181,7 +188,8 @@ class ReportViewModelTest {
 
         val state = viewModel.state.value
         assertTrue(!state.isWritingNarrative)
-        assertEquals("Aucune clé API n'est enregistrée pour OpenAI.", state.narrativeError)
+        assertEquals(StateCopy.MISSING_API_KEY, state.narrativeError)
+        assertEquals(StateAction.OPEN_SETTINGS, state.narrativeErrorAction)
         assertEquals(jsonBeforeNarrative, state.reportJson)
         assertNull(state.narrativeRange)
     }

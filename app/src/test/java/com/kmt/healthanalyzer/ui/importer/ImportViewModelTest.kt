@@ -3,6 +3,7 @@ package com.kmt.healthanalyzer.ui.importer
 import com.kmt.healthanalyzer.data.healthconnect.HealthConnectAvailabilityChecker
 import com.kmt.healthanalyzer.data.healthconnect.HealthConnectStatus
 import com.kmt.healthanalyzer.data.repository.HealthConnectSyncResult
+import com.kmt.healthanalyzer.ui.state.StateCopy
 import com.kmt.healthanalyzer.data.repository.HealthRepository
 import io.mockk.coEvery
 import io.mockk.every
@@ -85,8 +86,7 @@ class ImportViewModelTest {
 
         val state = viewModel.state.value
         assertTrue(state.syncHasIssue)
-        assertTrue(state.syncMessage!!.contains("historique"))
-        assertTrue(state.syncMessage!!.contains("30 jours"))
+        assertTrue(state.syncMessage!!.contains(StateCopy.HISTORY_PERMISSION_MISSING))
     }
 
     @Test

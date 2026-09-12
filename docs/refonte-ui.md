@@ -690,12 +690,73 @@ l'écrêtage cassé exprès pour vérifier qu'il sait échouer ; les dix-huit ax
 un ; lecture en niveaux de gris essayée sur la synthèse ; APK de débogage installé, lancé,
 et infobulle sortie au doigt dans la WebView.
 
-### Phase 5 — Les états, le mouvement, l'accessibilité
+### Phase 5 — Les états, le mouvement, l'accessibilité — **livrée**
 
-Textes exacts, animations, contrastes, lecteur d'écran.
+**Les états.** Les neuf textes du § 8 vivent dans `ui/state/StateCopy.kt`, et non plus au
+fil des écrans. Cinq y étaient déjà, sous une forme proche ; quatre manquaient.
 
-Vérification : chaque état du tableau § 8 atteint au moins une fois ; contrastes mesurés ;
-`prefers-reduced-motion` respecté.
+Trois décisions prises en cours de route :
+
+1. **Un échec porte sa cause, pas sa phrase.** `ChatResult.Failure` et
+   `NarrativeResult.Failure` transportaient un message tout écrit, ce qui laissait la
+   cause technique traverser jusqu'à l'écran : « Le chargement du contexte de santé a
+   échoué : base illisible ». Ils portent maintenant un `Throwable`, et
+   `StateCopy.forFailure` en tire la phrase **et** le geste. Trois tests affirmaient
+   l'ancien contrat — que le message de l'exception atteigne l'écran — et ont été
+   recentrés.
+2. **Le geste vient de l'état, pas d'une tournure de phrase.** L'écran d'analyse décidait
+   d'afficher « Ouvrir les réglages » en cherchant « clé API » dans le texte du message.
+   Le bouton se serait détaché en silence à la première reformulation.
+3. **« Analyse en cours… » s'annule.** Le tableau le demandait ; rien ne le faisait. Un
+   appel au fournisseur dure parfois une demi-minute, et la seule sortie était de quitter
+   l'écran, ce qui laissait l'appel courir. La question déjà posée reste en base :
+   l'effacer donnerait le sentiment que l'app a perdu ce qu'on venait de taper.
+
+Le défaut nommé dans le § 8 — `DriftSection` qui s'effaçait pendant son calcul — avait
+déjà été corrigé en phase 2.
+
+**Le mouvement.** Trois gestes, et rien d'autre : l'entrée d'une courbe (400 ms, à la
+première apparition seulement), le fondu d'onglet (150 ms, sans glissement latéral), le
+dépliage du détail (200 ms).
+
+Deux décisions :
+
+1. **Seul le dépliage s'anime ; le repli est immédiat.** Animer la fermeture rendait
+   l'état asynchrone : `hidden` restait faux deux dixièmes de seconde après un clic sur
+   « Masquer », donc un lecteur d'écran continuait d'annoncer un contenu refermé. Un
+   garde-fou existant l'a attrapé.
+2. **Le retour de `display: none` et le changement de hauteur tombent dans deux images
+   différentes.** Un élément qui vient d'apparaître n'a pas d'état antérieur : le
+   navigateur ne voit qu'un seul changement et n'anime rien. Une lecture d'`offsetHeight`
+   n'y suffit pas. Un filet de sécurité relâche la hauteur même quand `transitionend`
+   n'arrive jamais — durée nulle, bloc hors du document, transition interrompue.
+
+**L'accessibilité.** Le contraste de la coquille Compose est mesuré par
+`ThemeContrastTest`, qui a trouvé deux vrais défauts :
+
+- `--axis` tenait **1,70:1** en clair et 1,65:1 en sombre, sous le seuil de 3:1 des
+  éléments non textuels. Ce jeton est à la fois la ligne de base des graphiques et la
+  bordure `outline` de Material : un champ de saisie dont on ne voit pas le contour est
+  un défaut d'accessibilité, et la ligne de base disparaissait à l'impression. Corrigé à
+  `#8e8d82` (3,17:1) et `#64645d` (3,26:1).
+- `--critical` posé sur son propre aplat d'erreur ne tenait que **4,08:1**, et un message
+  d'erreur est le dernier texte qu'on veut rendre difficile à lire. Corrigé à `#be3131`
+  (4,81:1 sur ce fond, 5,42:1 sur le papier).
+
+Les dix-neuf graphiques portent maintenant un `<title>` et un `<desc>` reliés par
+`aria-labelledby`. La description se remplit au fil du dessin — `grid`, `xTimeAxis`,
+`lastPoint` y ajoutent chacun leur phrase — ce qui la donne aux dix-neuf sans les
+réécrire un par un, et surtout sans qu'elle se périme quand l'un d'eux change d'axe :
+« Échelle verticale de 0h à 10h. Bande cible marquée : cible 7–9 h. Période du 15 juil. 25
+au 7 sept. 26, soit 419 jours. Dernière valeur : 6h41. »
+
+Enfin : 44 pixels de hauteur minimale sur les commandes du rapport, un contour de focus
+clavier sur chacune, et le filet de titre qui suit désormais la hauteur du texte plutôt
+qu'une valeur écrite en dur — à 200 % de taille de police système, il restait un moignon.
+
+Vérifié : 187 tests JS, 513 tests Kotlin, 0 échec ; contrastes mesurés un par un, dont le
+calcul lui-même vérifié sur trois valeurs de référence — dont une que j'avais fausse ;
+`prefers-reduced-motion` essayé dans les deux sens.
 
 ---
 

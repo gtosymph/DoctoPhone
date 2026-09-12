@@ -135,6 +135,14 @@
     return new Date(iso + 'T12:00:00').getTime();
   }
 
+  /** L'inverse de [dateMs] : rend la date ISO d'un horodatage local. */
+  function isoOf(ms) {
+    const d = new Date(ms);
+    return d.getFullYear() + '-'
+      + String(d.getMonth() + 1).padStart(2, '0') + '-'
+      + String(d.getDate()).padStart(2, '0');
+  }
+
   // ---------------------------------------------------------------- mesure du texte
 
   /**
@@ -350,6 +358,34 @@
   // ---------------------------------------------------------------- cadre
 
   /**
+   * Les graphiques déjà apparus, pour ne jouer leur entrée qu'une fois.
+   *
+   * `redraw()` reconstruit tout le rapport à chaque bascule de thème et à chaque
+   * redimensionnement. Sans cette mémoire, la courbe se retracerait à chacun de ces
+   * événements, et le mouvement qui montrait le sens de lecture deviendrait un tic.
+   *
+   * La clé est le libellé d'accessibilité du graphique, seul identifiant que le moteur
+   * reçoive — chaque graphique porte le sien, et deux graphiques n'en partagent pas.
+   */
+  const enteredCharts = new Set();
+
+  /** Remet la mémoire des entrées à zéro. Sert aux tests, et à eux seuls. */
+  function forgetDrawnCharts() {
+    enteredCharts.clear();
+  }
+
+  /**
+   * Un numéro par cadre dessiné, pour donner au titre et à la description des
+   * identifiants uniques.
+   *
+   * `aria-labelledby` désigne des identifiants ; deux graphiques qui partageraient les
+   * leurs feraient annoncer la même chose pour les deux. Le compteur ne redescend jamais,
+   * y compris entre deux redessins : un identifiant réutilisé pointerait vers un nœud
+   * détaché.
+   */
+  let frameSequence = 0;
+
+  /**
    * Prépare un SVG et son groupe intérieur.
    *
    * @param {Element} host le conteneur qui reçoit le SVG
@@ -370,12 +406,48 @@
       preserveAspectRatio: 'xMidYMid meet',
       role: 'img',
     }, host);
-    if (o.label) {
-      const t = E('title', {}, svg);
-      t.textContent = o.label;
-    }
-    const g = E('g', { transform: 'translate(' + m.l + ',' + m.t + ')' }, svg);
-    return { svg, g, iw: W - m.l - m.r, ih: H - m.t - m.b, W, H, m };
+    /*
+     * Un `role="img"` sans texte est une image muette : le lecteur d'écran annonce
+     * « graphique » et s'arrête là.
+     *
+     * Le titre donne le sujet, la description donne ce qu'un œil aurait lu sur les axes.
+     * Les deux sont reliés par `aria-labelledby` : sur un SVG en ligne, un `<title>` seul
+     * n'est pas repris de façon fiable.
+     *
+     * La description se remplit au fil du dessin — `grid`, `xTimeAxis`, `lastPoint` y
+     * ajoutent chacun leur phrase. C'est le seul moyen d'en donner une aux dix-neuf
+     * graphiques sans les réécrire un par un, et surtout sans qu'elle se périme quand
+     * l'un d'eux change d'axe.
+     */
+    frameSequence += 1;
+    const titleId = 'ha-t' + frameSequence;
+    const descId = 'ha-d' + frameSequence;
+    const t = E('title', { id: titleId }, svg);
+    t.textContent = o.label || 'Graphique';
+    const d = E('desc', { id: descId }, svg);
+    svg.setAttribute('aria-labelledby', titleId + ' ' + descId);
+    // L'entrée se joue à la première apparition seulement. La feuille de style la coupe
+    // entièrement sous `prefers-reduced-motion: reduce`.
+    const firstAppearance = Boolean(o.label) && !enteredCharts.has(o.label);
+    if (firstAppearance) enteredCharts.add(o.label);
+
+    const g = E('g', {
+      transform: 'translate(' + m.l + ',' + m.t + ')',
+      class: firstAppearance ? 'ha-enter' : null,
+    }, svg);
+    return { svg, g, iw: W - m.l - m.r, ih: H - m.t - m.b, W, H, m, desc: d, notes: [] };
+  }
+
+  /**
+   * Ajoute une phrase à la description du graphique.
+   *
+   * Sans effet sur un cadre qui n'en porte pas — les essais qui appellent une primitive
+   * isolée passent parfois un objet réduit.
+   */
+  function note(f, sentence) {
+    if (!f || !f.notes || !f.desc || !sentence) return;
+    f.notes.push(sentence);
+    f.desc.textContent = f.notes.join(' ');
   }
 
   function yScale(min, max, ih) {
@@ -412,6 +484,7 @@
       x1: 0, x2: f.iw, y1: f.ih, y2: f.ih,
       stroke: cssVar('--axis'), 'stroke-width': 1,
     }, f.g);
+    note(f, 'Échelle verticale de ' + s.fmt(s.lo) + ' à ' + s.fmt(s.hi) + '.');
     return sy;
   }
 
@@ -430,6 +503,7 @@
       fill: cssVar('--band'),
     }, f.g);
     if (!label) return;
+    note(f, 'Bande cible marquée : ' + label + '.');
 
     const height = yBottom - yTop;
     const t = E('text', {
@@ -477,6 +551,7 @@
       style: 'font-variant-numeric:tabular-nums',
     }, g);
     t.textContent = label;
+    note(f, 'Dernière valeur : ' + label + '.');
     return g;
   }
 
@@ -489,6 +564,8 @@
     const span = (t1 - t0) || 1;
     const sx = t => (t - t0) / span * f.iw;
     const days = span / DAY_MS;
+    note(f, 'Période du ' + fmtDate(isoOf(t0)) + ' au ' + fmtDate(isoOf(t1))
+      + ', soit ' + Math.round(days) + ' jours.');
     const every = isCompact()
       ? (days > 400 ? 4 : days > 150 ? 2 : 1)
       : (days > 400 ? 2 : 1);
@@ -538,6 +615,11 @@
    */
   function xBandAxis(f, labels, format) {
     const n = labels.length || 1;
+    if (labels.length) {
+      const premier = format ? format(labels[0]) : String(labels[0]);
+      const dernier = format ? format(labels[labels.length - 1]) : String(labels[labels.length - 1]);
+      note(f, n + (n > 1 ? ' colonnes, de ' : ' colonne, ') + premier + ' à ' + dernier + '.');
+    }
     const step = f.iw / n;
     const every = Math.max(1, Math.ceil(n / (isCompact() ? 4 : 9)));
     labels.forEach((label, i) => {
@@ -729,9 +811,9 @@
   global.HA.engine = {
     NS, COMPACT_WIDTH, MONTHS_FR, DAY_MS, DASH,
     E, cssVar, isCompact, textWidth,
-    fmtMonth, fmtDate, fmtHours, fmtClock, fmtInt, fmtNum, dateMs,
+    fmtMonth, fmtDate, fmtHours, fmtClock, fmtInt, fmtNum, dateMs, isoOf, note,
     showTooltip, hideTooltip,
-    frame, yScale, scale, scaleOf, grid, targetBand, lastPoint,
+    frame, forgetDrawnCharts, yScale, scale, scaleOf, grid, targetBand, lastPoint,
     xTimeAxis, xBandAxis, clampLabelX,
     linePath, areaPath, segments, drawSeries,
     hoverNearest, hoverShape, drawEmpty, legend,

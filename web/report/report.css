@@ -92,7 +92,7 @@
   --ink-2: #52514e;
   --muted: #726f68;
   --grid: #e1e0d9;
-  --axis: #c3c2b7;
+  --axis: #8e8d82;
   --ring: rgba(11, 11, 11, .10);
   --accent: #4a3aa7;
   --accent-soft: rgba(74, 58, 167, .08);
@@ -111,7 +111,7 @@
   --good-text: #006300;
   --warning: #8f6200;
   --serious: #b04a14;
-  --critical: #d03b3b;
+  --critical: #be3131;
   --band: rgba(42, 120, 214, .07);
 
   /* --- Couleurs de domaine (direction « éditorial coloré ») ---------------
@@ -146,7 +146,7 @@
     --ink-2: #c3c2b7;
     --muted: #94928b;
     --grid: #2c2c2a;
-    --axis: #383835;
+    --axis: #64645d;
     --ring: rgba(255, 255, 255, .10);
     --accent: #9085e9;
     --accent-soft: rgba(144, 133, 233, .12);
@@ -194,7 +194,7 @@
   --ink-2: #c3c2b7;
   --muted: #94928b;
   --grid: #2c2c2a;
-  --axis: #383835;
+  --axis: #64645d;
   --ring: rgba(255, 255, 255, .10);
   --accent: #9085e9;
   --accent-soft: rgba(144, 133, 233, .12);
@@ -664,6 +664,81 @@
  * Ces règles ne s'appliquent qu'à `.ha-summary` : le rapport complet garde les siennes,
  * plus haut dans le fichier.
  */
+/* ------------------------------------------------------------- accessibilité
+
+   Une commande se rate au doigt en dessous de 44 pixels CSS — l'équivalent des 48 dp
+   que Material impose à la coquille native sur un écran de densité courante. Le
+   rembourrage seul ne suffit pas : c'est la hauteur minimale qui garantit la cible,
+   quel que soit le texte porté.
+
+   Le contour de focus est dessiné, jamais supprimé. `:focus-visible` le réserve à la
+   navigation au clavier : un clic à la souris ne le déclenche pas, donc rien n'oblige
+   à le masquer.
+*/
+.ha-tab, .ha-detail-toggle {
+  min-height: 44px;
+}
+.ha-tab:focus-visible, .ha-detail-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ------------------------------------------------------------------ mouvement
+
+   Sobre et utile : le mouvement montre une relation, il ne remplit pas un silence.
+
+   Trois gestes, et rien d'autre. L'entrée d'une courbe dit le sens de lecture, de
+   gauche à droite. Le fondu d'un onglet dit qu'on change de contenu, sans suggérer
+   une position dans une liste — d'où l'absence de glissement latéral. Le dépliage du
+   détail dit d'où sort le contenu.
+
+   Les chiffres ne défilent jamais vers leur valeur : un compteur qui grimpe est un
+   effet de démonstration, et sur une mesure de santé il se lit comme une donnée
+   instable.
+*/
+
+@keyframes ha-enter {
+  /*
+     Un balayage par découpe, et non un tracé par `stroke-dasharray` : ce dernier est
+     déjà pris, il porte le motif qui distingue deux séries en noir et blanc.
+
+     L'état final déborde volontairement du cadre. `inset(0 0 0 0)` clipperait au ras
+     de la boîte englobante et rognerait l'étiquette du dernier point, qui sort à
+     droite de la zone de dessin.
+  */
+  from { clip-path: inset(-10% 100% -10% 0); }
+  to { clip-path: inset(-10% -20% -10% 0); }
+}
+.ha-enter { animation: ha-enter .4s ease-out both; }
+
+@keyframes ha-tab-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.ha-tabpanel:not([hidden]) { animation: ha-tab-in .15s ease-out; }
+
+/* La hauteur est posée en JavaScript le temps de la transition, puis relâchée : une
+   hauteur figée déborderait dès qu'un graphique se redessine plus large. */
+.ha-detail-body { overflow: hidden; transition: height .2s ease; }
+
+/*
+   `prefers-reduced-motion: reduce` coupe tout, sans exception.
+
+   La règle porte sur `*` à dessein : une liste d'exceptions se périme au premier
+   effet ajouté ailleurs, et c'est précisément la personne qui a demandé moins de
+   mouvement qui en paierait l'oubli. `animation: none` annule l'animation en cours et
+   laisse l'élément dans son état naturel — une courbe entière, jamais une courbe
+   figée à moitié tracée.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @media print {
   @page { size: A4 portrait; margin: 14mm; }
 
@@ -686,7 +761,7 @@
     --ink-2: #52514e;
     --muted: #726f68;
     --grid: #e1e0d9;
-    --axis: #c3c2b7;
+    --axis: #8e8d82;
     --ring: rgba(11, 11, 11, .10);
     --accent: #4a3aa7;
     --accent-soft: rgba(74, 58, 167, .08);
@@ -694,7 +769,7 @@
     --good-text: #006300;
     --warning: #8f6200;
     --serious: #b04a14;
-    --critical: #d03b3b;
+    --critical: #be3131;
     --d-sleep: #4a3aa7;
     --d-sleep-ink: #3a2d85;
     --d-heart: #cf3446;

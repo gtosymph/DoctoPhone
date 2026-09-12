@@ -34,6 +34,8 @@ import com.kmt.healthanalyzer.domain.drift.WeeklyReadiness
 import com.kmt.healthanalyzer.domain.drift.WeeklyReview
 import com.kmt.healthanalyzer.ui.components.ScreenHeader
 import com.kmt.healthanalyzer.ui.components.SectionLabel
+import com.kmt.healthanalyzer.ui.state.StateAction
+import com.kmt.healthanalyzer.ui.state.StateCopy
 import com.kmt.healthanalyzer.ui.theme.HealthAnalyzerTheme
 import com.kmt.healthanalyzer.ui.theme.domainColors
 import java.time.LocalDate
@@ -129,13 +131,11 @@ private fun ChangedSection(review: WeeklyReview, accent: Color) {
 
         when (val readiness = review.readiness) {
             is WeeklyReadiness.NotEnoughBaseline -> Explanation(
-                "Il faut ${readiness.requiredDays} jours de référence pour comparer. " +
-                    "Vous en avez ${readiness.measuredDays}.",
+                StateCopy.shortBaseline(readiness.requiredDays, readiness.measuredDays),
             )
 
             is WeeklyReadiness.NotEnoughRecent -> Explanation(
-                "${readiness.requiredDays} jours mesurés sont nécessaires cette semaine. " +
-                    "Vous en avez ${readiness.measuredDays}.",
+                StateCopy.sparseWeek(readiness.requiredDays, readiness.measuredDays),
             )
 
             WeeklyReadiness.Ready -> if (review.hasDrift) {
@@ -232,12 +232,14 @@ private fun FirstUseBanner(onOpenImport: () -> Unit) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Aucune donnée pour l'instant", style = MaterialTheme.typography.titleLarge)
             Text(
-                text = "Importez votre export Samsung Health, ou connectez Health Connect. " +
-                    "Tout reste sur cet appareil.",
+                // Le titre porte déjà la première phrase ; la seconde dit quoi faire, et
+                // la troisième répond à la question qu'on se pose en confiant des mesures
+                // de santé à une app.
+                text = StateCopy.NO_DATA.substringAfter(". ") + " Tout reste sur cet appareil.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Button(onClick = onOpenImport) { Text("Importer mes données") }
+            Button(onClick = onOpenImport) { Text(StateAction.IMPORT.label) }
         }
     }
 }
@@ -247,7 +249,7 @@ private fun LoadingRow(accent: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         CircularProgressIndicator(modifier = Modifier.size(14.dp), color = accent, strokeWidth = 2.dp)
         Text(
-            text = "Comparaison de la semaine écoulée à vos huit dernières semaines…",
+            text = StateCopy.COMPARING_WEEK,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -23,6 +23,7 @@ import com.kmt.healthanalyzer.domain.drift.DriftMetric
 import com.kmt.healthanalyzer.domain.drift.DriftNarrator
 import com.kmt.healthanalyzer.domain.drift.MetricDrift
 import com.kmt.healthanalyzer.ui.components.SectionLabel
+import com.kmt.healthanalyzer.ui.state.StateCopy
 import com.kmt.healthanalyzer.ui.theme.DomainColor
 import com.kmt.healthanalyzer.ui.theme.DomainColors
 import com.kmt.healthanalyzer.ui.theme.HealthAnalyzerTheme
@@ -81,7 +82,7 @@ private fun LoadingRow(accent: Color) {
     ) {
         CircularProgressIndicator(modifier = Modifier.size(14.dp), color = accent, strokeWidth = 2.dp)
         Text(
-            text = "Comparaison de la semaine écoulée à vos huit dernières semaines…",
+            text = StateCopy.COMPARING_WEEK,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

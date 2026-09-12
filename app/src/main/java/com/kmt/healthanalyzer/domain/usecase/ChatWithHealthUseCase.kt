@@ -37,7 +37,16 @@ data class ChatTurn(val role: ChatRole, val content: String)
  */
 sealed interface ChatResult {
     data class Success(val reply: String, val context: ChatContext, val statusNote: String? = null) : ChatResult
-    data class Failure(val message: String) : ChatResult
+
+    /**
+     * L'échec porte sa **cause**, pas sa phrase.
+     *
+     * Le cas d'usage sait ce qui s'est passé ; il ne sait pas ce que l'écran doit
+     * écrire, ni quel bouton l'accompagne. C'est `StateCopy.forFailure` qui tranche, en
+     * un seul endroit, pour toute l'app — sans quoi chaque chemin d'erreur finit par
+     * rédiger sa propre excuse.
+     */
+    data class Failure(val cause: Throwable) : ChatResult
 }
 
 /**
@@ -114,9 +123,7 @@ class ChatWithHealthUseCase @Inject constructor(
     suspend operator fun invoke(history: List<ChatTurn>, context: ChatContext): ChatResult = withContext(Dispatchers.IO) {
         val settings = preferences.settings.first()
         val apiKey = apiKeyStore.key(settings.provider)
-            ?: return@withContext ChatResult.Failure(
-                "Aucune clé API n'est enregistrée pour ${settings.provider.displayName}.",
-            )
+            ?: return@withContext ChatResult.Failure(LlmError.MissingApiKey())
 
         val overview = historyOverviewOf(context.historyReport)
         val overviewText = describeHistoryOverview(overview)
@@ -141,7 +148,7 @@ class ChatWithHealthUseCase @Inject constructor(
             val response = try {
                 clientFactory.clientFor(settings.provider).complete(request, apiKey)
             } catch (failure: LlmError) {
-                return@withContext ChatResult.Failure(failure.message ?: "L'appel au modèle a échoué.")
+                return@withContext ChatResult.Failure(failure)
             }
 
             if (isLastAllowedCall) {

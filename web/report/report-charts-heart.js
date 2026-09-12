@@ -156,6 +156,11 @@
       label: 'Corrélations croisées',
     });
 
+    // Ce graphique dessine son propre axe, donc aucune primitive ne remplit sa
+    // description pour lui. Elle s'écrit ici, à la main.
+    E.note(f, rows.length + ' associations mesurées, de −0,5 à +0,5. '
+      + 'La plus forte : ' + rows[0].label + ', ' + E.fmtNum(rows[0].r, 2) + '.');
+
     const sx = v => (v + 0.5) * f.iw;
     E.E('line', {
       x1: sx(0), x2: sx(0), y1: 0, y2: f.ih,

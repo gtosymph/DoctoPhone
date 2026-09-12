@@ -56,6 +56,8 @@ import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 import com.kmt.healthanalyzer.ui.components.ScreenHeader
 import com.kmt.healthanalyzer.ui.home.TimeRange
+import com.kmt.healthanalyzer.ui.state.StateAction
+import com.kmt.healthanalyzer.ui.state.StateCopy
 import com.kmt.healthanalyzer.ui.theme.HealthAnalyzerTheme
 import com.kmt.healthanalyzer.ui.theme.domainColors
 import com.kmt.healthanalyzer.ui.webview.JsonModelInterceptor
@@ -67,6 +69,7 @@ private const val REPORT_URL = "https://appassets.androidplatform.net/assets/rep
 /** Écran de rapport : point d'entrée qui relie [ReportViewModel] à [ReportContent]. */
 @Composable
 fun ReportScreen(
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ReportViewModel = hiltViewModel(),
     driftViewModel: DriftViewModel = hiltViewModel(),
@@ -86,6 +89,7 @@ fun ReportScreen(
         state = state,
         driftState = driftState,
         onRangeSelected = viewModel::selectRange,
+        onOpenSettings = onOpenSettings,
         onRefresh = viewModel::refresh,
         onExport = viewModel::export,
         onExportSummary = viewModel::exportSummary,
@@ -107,6 +111,7 @@ fun ReportContent(
     state: ReportUiState,
     driftState: DriftUiState,
     onRangeSelected: (TimeRange) -> Unit,
+    onOpenSettings: () -> Unit,
     onRefresh: () -> Unit,
     onExport: () -> Unit,
     onExportSummary: () -> Unit,
@@ -177,18 +182,37 @@ fun ReportContent(
             NarrativeRow(state = state, onWriteNarrative = onWriteNarrative)
             DriftSection(state = driftState)
             AnimatedVisibility(state.errorMessage != null, enter = fadeIn(), exit = fadeOut()) {
-                state.errorMessage?.let { ErrorCard(it) }
+                state.errorMessage?.let {
+                    ErrorCard(it, state.errorAction, onOpenSettings = onOpenSettings, onRetry = onRefresh)
+                }
             }
             AnimatedVisibility(state.exportError != null, enter = fadeIn(), exit = fadeOut()) {
-                state.exportError?.let { ErrorCard(it) }
+                state.exportError?.let { ErrorCard(it, StateAction.NONE) }
             }
             AnimatedVisibility(state.narrativeError != null, enter = fadeIn(), exit = fadeOut()) {
-                state.narrativeError?.let { ErrorCard(it) }
+                state.narrativeError?.let {
+                    ErrorCard(
+                        it,
+                        state.narrativeErrorAction,
+                        onOpenSettings = onOpenSettings,
+                        onRetry = onWriteNarrative,
+                    )
+                }
             }
         }
 
+        // L'attente dit sur quoi elle porte. Une barre seule ne se distingue pas d'un
+        // blocage, et le calcul d'un an de mesures prend assez de temps pour qu'on se
+        // demande si quelque chose se passe.
         AnimatedVisibility(state.isLoading, enter = fadeIn(), exit = fadeOut()) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text(
+                    text = StateCopy.buildingReport(state.loadingDays),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         AndroidView(
@@ -351,15 +375,36 @@ private fun ExportConfirmationDialog(
     )
 }
 
+/**
+ * Un échec, et le geste qui le suit.
+ *
+ * Le bouton n'est pas un ornement : un message qui décrit une panne sans offrir de suite
+ * laisse son lecteur devant un mur. Quand `StateCopy` ne propose aucun geste — un export
+ * refusé par le système de fichiers, par exemple — la carte reste une simple phrase.
+ */
 @Composable
-private fun ErrorCard(message: String) {
+private fun ErrorCard(
+    message: String,
+    action: StateAction,
+    onOpenSettings: () -> Unit = {},
+    onRetry: () -> Unit = {},
+) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
-        Text(
-            text = message,
+        Column(
             modifier = Modifier.padding(16.dp),
-            color = MaterialTheme.colorScheme.onErrorContainer,
-            style = MaterialTheme.typography.bodyMedium,
-        )
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            when (action) {
+                StateAction.OPEN_SETTINGS -> TextButton(onClick = onOpenSettings) { Text(action.label) }
+                StateAction.RETRY -> TextButton(onClick = onRetry) { Text(action.label) }
+                else -> Unit
+            }
+        }
     }
 }
 

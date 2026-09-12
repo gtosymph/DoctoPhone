@@ -20,7 +20,8 @@ import javax.inject.Inject
 /** Le résultat d'une écriture de récit : le texte prêt à poser dans le rapport, ou une raison lisible. */
 sealed interface NarrativeResult {
     data class Success(val narrative: ReportNarrative) : NarrativeResult
-    data class Failure(val message: String) : NarrativeResult
+    /** L'échec porte sa cause ; `StateCopy.forFailure` en tire la phrase et le geste. */
+    data class Failure(val cause: Throwable) : NarrativeResult
 }
 
 /**
@@ -46,7 +47,7 @@ class AnalyzeReportNarrativeUseCase @Inject constructor(
     suspend operator fun invoke(report: ReportModel): NarrativeResult = withContext(Dispatchers.IO) {
         val settings = preferences.settings.first()
         val apiKey = apiKeyStore.key(settings.provider)
-            ?: return@withContext NarrativeResult.Failure("Aucune clé API n'est enregistrée pour ${settings.provider.displayName}.")
+            ?: return@withContext NarrativeResult.Failure(LlmError.MissingApiKey())
 
         val request = LlmRequest(
             systemPrompt = readNarrativeSystemPrompt(),
@@ -57,12 +58,17 @@ class AnalyzeReportNarrativeUseCase @Inject constructor(
         val response = try {
             clientFactory.clientFor(settings.provider).complete(request, apiKey)
         } catch (failure: LlmError) {
-            return@withContext NarrativeResult.Failure(failure.message ?: "L'appel au modèle a échoué.")
+            return@withContext NarrativeResult.Failure(failure)
         }
 
         when (val parsed = NarrativeResponseParser.parse(response.text)) {
             is NarrativeParseResult.Success -> NarrativeResult.Success(parsed.narrative)
-            is NarrativeParseResult.Failure -> NarrativeResult.Failure(parsed.reason)
+            // La cause de lecture est enveloppée plutôt que montrée : « le bilan n'a pas
+            // le bon nombre de sections » n'apprend rien au lecteur, alors que
+            // `LlmError.Malformed` lui propose de réessayer ou de changer de modèle. Le
+            // détail reste dans l'exception, donc dans le journal.
+            is NarrativeParseResult.Failure ->
+                NarrativeResult.Failure(LlmError.Malformed(IllegalStateException(parsed.reason)))
         }
     }
 

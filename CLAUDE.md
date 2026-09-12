@@ -178,6 +178,33 @@ ProGuard (voir la section précédente), le `FileProvider`, et l'installeur syst
 Corollaire pour tout travail délégué : un compte rendu qui dit « X tests, 0 échec » décrit
 ce que les tests couvrent, pas ce que l'app fait. Les deux se vérifient séparément.
 
+### Les textes d'état vivent en un seul endroit
+
+`ui/state/StateCopy.kt` porte les neuf phrases que l'utilisateur lit quand rien ne va, et
+le geste qui accompagne chacune. N'en écrivez pas de nouvelle au fil d'un écran : neuf
+tons différents apparaissent vite, et surtout des messages qui décrivent la panne sans
+dire comment en sortir.
+
+Trois règles, tenues par `StateCopyTest` :
+
+1. Un état vide dit toujours **pourquoi**, avec ses deux nombres. « Aucune dérive » et
+   « pas assez de données » se ressemblent à l'écran.
+2. Une attente dit toujours **sur quoi** elle porte : un mois, un nombre de jours.
+3. Un échec dit toujours **quoi faire ensuite**, dans la phrase ou sur le bouton.
+
+Corollaire : un `Result.Failure` du domaine porte sa **cause** (`Throwable`), jamais une
+phrase toute faite. `StateCopy.forFailure` en tire le texte et le geste. Laisser passer
+le message d'une exception donne « Le chargement du contexte de santé a échoué : base
+illisible », qui n'aide personne.
+
+### Contraste : mesuré, jamais supposé
+
+`ThemeContrastTest` mesure les couples `couleur` / `onCouleur` des deux thèmes Compose, et
+`ThemeTokenParityTest` garde la feuille de style alignée. Les deux ont déjà trouvé de
+vraies fautes : `--axis` à 1,70:1 (la bordure d'un champ de saisie qu'on ne voit pas), et
+`--critical` à 4,08:1 sur son propre aplat d'erreur. Avant de changer une couleur,
+lancez-les.
+
 ### Confidentialité
 `HealthPromptBuilder` est la seule porte de sortie des données vers un tiers. Il n'envoie
 que des **agrégats** : moyennes hebdomadaires et mensuelles, profils par jour de semaine

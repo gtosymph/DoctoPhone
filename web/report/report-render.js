@@ -182,6 +182,9 @@
   }
 
   /** Combien d'indicateurs passent en gros, en tête de section. */
+  /** Durée du dépliage du détail. Doit suivre `.ha-detail-body` dans `report.css`. */
+  const DETAIL_ANIMATION_MS = 200;
+
   const LEAD_KPI_COUNT = 2;
 
   /** Une rangée d'indicateurs : la valeur en gros, le libellé en dessous. */
@@ -306,17 +309,117 @@
      * déplie.
      */
     let drawn = false;
+    let isOpen = false;
     const label = 'Voir le détail (' + detail.length + ')';
     const button = el('button', 'ha-detail-toggle', label);
     button.type = 'button';
     button.setAttribute('aria-expanded', 'false');
+
+    /**
+     * Anime la hauteur du bloc, puis la relâche.
+     *
+     * `height: auto` ne se transitionne pas : la hauteur d'arrivée est donc mesurée, posée
+     * en pixels, puis rendue à `auto` une fois le mouvement fini. La garder figée
+     * déborderait dès qu'un graphique se redessine plus large — au changement d'orientation,
+     * par exemple.
+     *
+     * La lecture de `offsetHeight` force le navigateur à recalculer la mise en page entre
+     * les deux valeurs ; sans elle, il ne verrait qu'un seul changement et n'animerait rien.
+     */
+    let settleTimer = null;
+
+    /**
+     * Ouvre ou referme le bloc.
+     *
+     * **Seul le dépliage s'anime**, comme le demandent les specs. Le repli est immédiat,
+     * et c'est un choix : animer la fermeture rendrait l'état asynchrone, donc `hidden`
+     * resterait faux pendant deux dixièmes de seconde après un clic sur « Masquer ». Un
+     * lecteur d'écran continuerait d'annoncer un contenu que la personne vient de
+     * refermer, et le second clic ne serait plus vérifiable d'un coup.
+     */
+    function setOpen(open) {
+      isOpen = open;
+
+      if (!open) {
+        if (settleTimer !== null) {
+          global.clearTimeout(settleTimer);
+          settleTimer = null;
+        }
+        body.style.height = '';
+        body.hidden = true;
+        return;
+      }
+
+      body.hidden = false;
+      // La hauteur d'arrivée se mesure à hauteur libre. La mesurer après avoir posé
+      // `0px` rendait zéro — un élément bridé à zéro n'a plus de contenu à mesurer — et
+      // le bloc s'ouvrait sur rien du tout.
+      body.style.height = '';
+      const target = body.scrollHeight;
+      body.style.height = '0px';
+
+      /*
+       * Le retour de `display: none` et le changement de hauteur doivent tomber dans deux
+       * images différentes.
+       *
+       * Un élément qui vient d'apparaître n'a pas d'état antérieur : le navigateur ne voit
+       * qu'un seul changement, de « absent » à « haut de 1452 pixels », et n'anime rien.
+       * Une lecture de `offsetHeight` n'y suffit pas — elle force le calcul de la mise en
+       * page, pas le passage à l'image suivante.
+       *
+       * Ce report ne concerne que la hauteur : `hidden` et `aria-expanded` ont déjà changé
+       * au-dessus, donc l'état lu par un lecteur d'écran est juste dès le clic.
+       */
+      global.setTimeout(function () {
+        if (!isOpen) return;
+        body.style.height = target + 'px';
+        armSettle();
+      }, 0);
+    }
+
+    /**
+     * Rend sa hauteur libre au bloc, et le cache s'il est replié.
+     *
+     * Une hauteur laissée en place fige le bloc : un graphique qui se redessine plus
+     * haut, au changement d'orientation par exemple, déborderait sous un couvercle.
+     */
+    function settle() {
+      if (settleTimer !== null) {
+        global.clearTimeout(settleTimer);
+        settleTimer = null;
+      }
+      body.style.height = '';
+      body.hidden = !isOpen;
+    }
+
+    /**
+     * Arme la fin du mouvement, avec un filet.
+     *
+     * `transitionend` ne se déclenche pas dans tous les cas : durée nulle sous
+     * `prefers-reduced-motion`, bloc hors du document, transition interrompue. Sans ce
+     * filet, la hauteur restait figée et le bloc replié gardait `hidden` à faux —
+     * invisible à l'œil, mais toujours présent pour un lecteur d'écran.
+     */
+    function armSettle() {
+      if (settleTimer !== null) global.clearTimeout(settleTimer);
+      settleTimer = global.setTimeout(settle, DETAIL_ANIMATION_MS + 60);
+    }
+
+    body.addEventListener('transitionend', function (event) {
+      if (event.propertyName && event.propertyName !== 'height') return;
+      settle();
+    });
+
     button.addEventListener('click', function () {
-      const open = body.hidden;
+      const open = !isOpen;
       if (open && !drawn) {
+        // Le dessin précède l'ouverture : la hauteur d'arrivée se mesure sur le contenu
+        // réel, pas sur un bloc encore vide.
+        body.hidden = false;
         renderCardGroups(body, detail, model);
         drawn = true;
       }
-      body.hidden = !open;
+      setOpen(open);
       button.setAttribute('aria-expanded', String(open));
       button.textContent = open ? 'Masquer le détail' : label;
     });

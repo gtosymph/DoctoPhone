@@ -1,6 +1,7 @@
 package com.kmt.healthanalyzer.data.repository
 
 import java.time.Instant
+import com.kmt.healthanalyzer.ui.state.StateCopy
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import org.junit.Assert.assertEquals
@@ -75,7 +76,7 @@ class HealthConnectSyncResultTest {
         assertTrue(result.hasIssue)
         val message = result.toUserMessage()
         assertTrue(message.contains("Données disponibles du 10 août 2026 au 9 septembre 2026."))
-        assertTrue(message.contains("historique au-delà de 30 jours"))
+        assertTrue(message.contains(StateCopy.HISTORY_PERMISSION_MISSING))
     }
 
     @Test

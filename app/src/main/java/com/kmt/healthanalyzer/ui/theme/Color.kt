@@ -28,10 +28,23 @@ val SurfaceLight = Color(0xFFFCFCFB) // --surface
 val InkLight = Color(0xFF0B0B0B) // --ink
 val InkMutedLight = Color(0xFF52514E) // --ink-2
 val GridLight = Color(0xFFE1E0D9) // --grid
-val AxisLight = Color(0xFFC3C2B7) // --axis
+/**
+ * Le trait d'axe, et la bordure `outline` de Material.
+ *
+ * Mesuré à 1,70:1 sur le papier, il était sous le seuil de 3:1 des éléments non
+ * textuels : la bordure d'un champ de saisie qu'on ne voit pas est un défaut
+ * d'accessibilité, et la ligne de base d'un graphique disparaissait à l'impression.
+ * Voir `ThemeContrastTest`.
+ */
+val AxisLight = Color(0xFF8E8D82) // --axis
 val AccentLight = Color(0xFF4A3AA7) // --accent
 val AccentSoftLight = Color(0x144A3AA7) // --accent-soft
-val CriticalLight = Color(0xFFD03B3B) // --critical
+/**
+ * Le rouge d'alerte. Assombri : posé sur son propre aplat d'erreur, il ne tenait que
+ * 4,08:1 — et un message d'erreur est le dernier texte qu'on veut rendre difficile à
+ * lire. Il vaut maintenant 4,81:1 sur ce fond, 5,42:1 sur le papier.
+ */
+val CriticalLight = Color(0xFFBE3131) // --critical
 
 /**
  * Encre lisible sur un aplat [AccentLight] / [AccentDark] — jeton `--accent-contrast`.
@@ -50,7 +63,7 @@ val SurfaceDark = Color(0xFF1A1A19) // --surface
 val InkDark = Color(0xFFFFFFFF) // --ink
 val InkMutedDark = Color(0xFFC3C2B7) // --ink-2
 val GridDark = Color(0xFF2C2C2A) // --grid
-val AxisDark = Color(0xFF383835) // --axis
+val AxisDark = Color(0xFF64645D) // --axis
 val AccentDark = Color(0xFF9085E9) // --accent
 val AccentSoftDark = Color(0x1F9085E9) // --accent-soft
 val CriticalDark = Color(0xFFE66767) // --critical

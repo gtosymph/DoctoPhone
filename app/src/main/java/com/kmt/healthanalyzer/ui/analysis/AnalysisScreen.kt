@@ -46,6 +46,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 import com.kmt.healthanalyzer.data.db.entity.ChatMessageEntity
+import com.kmt.healthanalyzer.ui.state.StateAction
+import com.kmt.healthanalyzer.ui.state.StateCopy
 import com.kmt.healthanalyzer.ui.webview.JsonModelInterceptor
 import java.io.ByteArrayInputStream
 
@@ -72,6 +74,7 @@ fun AnalysisScreen(
         state = state,
         onDraftChanged = viewModel::setDraft,
         onSend = viewModel::send,
+        onCancelSend = viewModel::cancelSend,
         onClearConversation = viewModel::clearConversation,
         onOpenSettings = onOpenSettings,
         modifier = modifier,
@@ -93,6 +96,7 @@ fun ChatContent(
     state: ChatUiState,
     onDraftChanged: (String) -> Unit,
     onSend: () -> Unit,
+    onCancelSend: () -> Unit,
     onClearConversation: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
@@ -126,8 +130,26 @@ fun ChatContent(
     // La barre de saisie est ancrée en bas de l'écran : sans `imePadding`, le clavier la
     // recouvrirait plutôt que de la repousser, en mode bord-à-bord (`enableEdgeToEdge`).
     Column(modifier = modifier.fillMaxSize().imePadding()) {
+        // L'attente dit ce qu'elle fait. Une barre seule, au-dessus d'une conversation
+        // figée, ne se distingue pas d'une app bloquée.
         if (state.isSending) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Column {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = StateCopy.ANALYZING,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    // Un appel au fournisseur peut durer une demi-minute. Sans ce bouton,
+                    // la seule sortie serait de quitter l'écran.
+                    TextButton(onClick = onCancelSend) { Text(StateAction.CANCEL.label) }
+                }
+            }
         }
         if (state.isRefreshingContext) {
             RefreshingContextBanner()
@@ -202,7 +224,9 @@ fun ChatContent(
         if (state.errorMessage == null) {
             state.statusMessage?.let { StatusNoteBanner(it) }
         }
-        state.errorMessage?.let { ChatErrorCard(it, onOpenSettings) }
+        state.errorMessage?.let {
+            ChatErrorCard(it, state.errorAction, onOpenSettings = onOpenSettings, onRetry = onSend)
+        }
 
         ChatInputRow(
             state = state,
@@ -314,8 +338,20 @@ private fun StatusNoteBanner(text: String) {
     }
 }
 
+/**
+ * Un échec de la conversation, et le geste qui le suit.
+ *
+ * Le geste vient de `StateCopy`, pas d'une recherche de « clé API » dans le texte du
+ * message : cette recherche liait le bouton à une tournure de phrase, et se serait
+ * détachée en silence dès la première reformulation du message.
+ */
 @Composable
-private fun ChatErrorCard(message: String, onOpenSettings: () -> Unit) {
+private fun ChatErrorCard(
+    message: String,
+    action: StateAction,
+    onOpenSettings: () -> Unit,
+    onRetry: () -> Unit,
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -324,8 +360,10 @@ private fun ChatErrorCard(message: String, onOpenSettings: () -> Unit) {
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(message, color = MaterialTheme.colorScheme.onErrorContainer)
-            if (message.contains("clé API", ignoreCase = true)) {
-                Button(onClick = onOpenSettings) { Text("Ouvrir les réglages") }
+            when (action) {
+                StateAction.OPEN_SETTINGS -> Button(onClick = onOpenSettings) { Text(action.label) }
+                StateAction.RETRY -> Button(onClick = onRetry) { Text(action.label) }
+                else -> Unit
             }
         }
     }

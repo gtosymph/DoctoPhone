@@ -47,7 +47,7 @@ object HealthAnalyzerTheme {
  * `--axis` (le trait plus affirmé d'une bordure). Les intervertir donne des séparateurs
  * trop lourds et des bordures trop timides.
  */
-private val LightColors = lightColorScheme(
+internal val LightColors = lightColorScheme(
     primary = AccentLight,
     onPrimary = OnAccentLight,
     primaryContainer = AccentSoftLight,
@@ -62,7 +62,7 @@ private val LightColors = lightColorScheme(
     onTertiaryContainer = AccentLight,
     error = CriticalLight,
     onError = Color.White,
-    errorContainer = Color(0x14D03B3B),
+    errorContainer = Color(0x14BE3131),
     onErrorContainer = CriticalLight,
     background = PaperLight,
     onBackground = InkLight,
@@ -94,7 +94,7 @@ private val LightColors = lightColorScheme(
     surfaceTint = PaperLight,
 )
 
-private val DarkColors = darkColorScheme(
+internal val DarkColors = darkColorScheme(
     primary = AccentDark,
     onPrimary = OnAccentDark,
     primaryContainer = AccentSoftDark,

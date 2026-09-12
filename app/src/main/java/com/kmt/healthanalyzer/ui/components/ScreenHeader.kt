@@ -2,10 +2,12 @@ package com.kmt.healthanalyzer.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
@@ -37,13 +39,17 @@ fun ScreenHeader(
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
+        // `IntrinsicSize.Min` donne à la rangée la hauteur de son contenu, ce qui permet
+        // au filet de la suivre. Sans cela, sa hauteur était écrite en dur : à 200 % de
+        // taille de police système, le titre passait sur deux lignes et le filet restait
+        // un moignon à côté.
+        modifier = modifier.fillMaxWidth().height(IntrinsicSize.Min),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
                 .width(4.dp)
-                .height(if (subtitle != null) 46.dp else 32.dp)
+                .fillMaxHeight()
                 .clip(RoundedCornerShape(2.dp))
                 .background(accent),
         )
