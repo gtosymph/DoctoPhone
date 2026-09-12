@@ -763,8 +763,22 @@
   color: var(--ink-2);
   margin: 0 0 8px;
 }
-.ha-legend span { display: inline-flex; align-items: center; gap: 5px; }
-.ha-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.ha-legend span { display: inline-flex; align-items: center; gap: 6px; }
+/*
+  L'échantillon de la légende est le trait de la série, motif compris, et non une
+  pastille de couleur : imprimée en niveaux de gris, une pastille ne distingue plus rien.
+*/
+.ha-legend svg {
+  /*
+    La largeur est reprise ici parce que `.ha-chart svg` pose `width: 100%` pour les
+    graphiques, et que la légende vit à l'intérieur du même conteneur. Sans cette reprise,
+    l'échantillon s'étire sur toute la carte et pousse son libellé à la ligne.
+  */
+  flex: none;
+  width: 22px;
+  height: 10px;
+  overflow: visible;
+}
 
 .ha-points { margin: 14px 0 0; padding-left: 20px; color: var(--ink-2); }
 .ha-points li { margin-bottom: 7px; }

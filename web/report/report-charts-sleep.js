@@ -3,6 +3,10 @@
  *
  * Chaque fonction reçoit le conteneur et le modèle de rapport, et ne lit que la section
  * `sleep`. Voir `report-model.js` pour la structure exacte et les conventions.
+ *
+ * Aucun de ces graphiques ne fixe ses propres bornes : `E.scale` les déduit des mesures.
+ * Un axe décidé à l'avance finit par écrêter une valeur réelle ou par graduer une plage
+ * que personne n'a atteinte.
  */
 
 (function (global) {
@@ -21,6 +25,9 @@
 
   /** Durée à partir de laquelle une nuit atteint la zone cible. */
   const TARGET_HOURS = 7;
+
+  /** Borne haute de la zone cible. */
+  const TARGET_HOURS_HIGH = 9;
 
   /**
    * Dit si une tranche de durée atteint la cible, à partir de son étiquette.
@@ -48,9 +55,16 @@
     const rows = model.sleep.nightly;
     if (!rows.length) return E.drawEmpty(host, 'Aucune nuit enregistrée sur cette période.');
 
-    const f = E.frame(host, { h: 280, label: 'Durée de sommeil par nuit' });
-    const sy = E.grid(f, 0, 12, [0, 3, 6, 7, 9, 12], v => v + 'h');
-    E.targetBand(f, sy, 7, 9);
+    // La cible entre dans l'étendue de l'axe : une bande à moitié hors du cadre ne se
+    // lit pas, même quand aucune nuit ne l'atteint.
+    const s = E.scaleOf(rows.map(r => r.hours).concat([TARGET_HOURS_HIGH]), {
+      zero: true, fmt: v => v + 'h',
+    });
+    if (!s) return E.drawEmpty(host, 'Aucune nuit enregistrée sur cette période.');
+
+    const f = E.frame(host, { h: 280, gutter: s.gutter, label: 'Durée de sommeil par nuit' });
+    const sy = E.grid(f, s);
+    E.targetBand(f, sy, TARGET_HOURS, TARGET_HOURS_HIGH, 'cible 7–9 h');
 
     const t0 = E.dateMs(rows[0].date);
     const t1 = E.dateMs(rows[rows.length - 1].date);
@@ -61,7 +75,7 @@
     for (const r of rows) {
       const t = E.dateMs(r.date);
       const x = sx(t);
-      const y = sy(Math.min(r.hours, 12));
+      const y = sy(r.hours);
       E.E('circle', { cx: x, cy: y, r: 2.4, fill: violet, opacity: .38 }, f.g);
       pts.push({ x, y, t, row: r });
     }
@@ -71,15 +85,14 @@
       const window = rows.slice(Math.max(0, i - SLEEP_SMOOTHING_NIGHTS + 1), i + 1);
       if (window.length < SLEEP_SMOOTHING_MIN) continue;
       const mean = window.reduce((a, r) => a + r.hours, 0) / window.length;
-      smooth.push({ x: sx(E.dateMs(rows[i].date)), y: sy(Math.min(mean, 12)), t: E.dateMs(rows[i].date) });
+      const t = E.dateMs(rows[i].date);
+      smooth.push({ x: sx(t), y: sy(mean), t, mean });
     }
-    for (const seg of E.segments(smooth, MAX_GAP_DAYS * E.DAY_MS)) {
-      if (seg.length < 2) continue;
-      E.E('path', {
-        d: E.linePath(seg), fill: 'none', stroke: violet,
-        'stroke-width': 2.5, 'stroke-linejoin': 'round',
-      }, f.g);
-    }
+    E.drawSeries(f, smooth, {
+      color: violet, width: 2.5, maxGapMs: MAX_GAP_DAYS * E.DAY_MS,
+    });
+    const last = smooth[smooth.length - 1];
+    if (last) E.lastPoint(f, last, violet, E.fmtHours(last.mean));
 
     E.hoverNearest(f, pts, p => {
       const lines = [E.fmtHours(p.row.hours) + ' de sommeil'];
@@ -92,19 +105,26 @@
   /**
    * Heure de coucher, nuit par nuit.
    *
-   * L'axe court de 20h à 7h du matin, sans coupure à minuit : le modèle fournit des
-   * heures relatives, négatives avant minuit.
+   * L'axe court du soir au matin, sans coupure à minuit : le modèle fournit des heures
+   * relatives, négatives avant minuit. Les bornes suivent les données — un coucher à
+   * 19 h ne doit pas être rabattu sur 20 h.
    */
   charts['sleep-bedtime'] = function (host, model) {
     const rows = model.sleep.nightly.filter(r => r.bedRel !== null && r.bedRel !== undefined);
     if (!rows.length) return E.drawEmpty(host, 'Aucune heure de coucher enregistrée.');
 
-    const f = E.frame(host, { h: 260, label: 'Heure de coucher par nuit' });
-    const ymin = -4;
-    const ymax = 7;
+    const values = rows.map(r => r.bedRel);
+    const ymin = Math.min(-4, Math.floor(Math.min.apply(null, values) / 2) * 2);
+    const ymax = Math.max(7, Math.ceil(Math.max.apply(null, values) / 2) * 2);
+
+    const labels = [];
+    for (let v = Math.ceil(ymin / 2) * 2; v <= ymax; v += 2) labels.push(v);
+    const gutter = Math.max.apply(null, labels.map(v => E.textWidth(v === 0 ? 'minuit' : E.fmtClock(v)))) + 12;
+
+    const f = E.frame(host, { h: 260, gutter, label: 'Heure de coucher par nuit' });
     const sy = E.yScale(ymin, ymax, f.ih);
 
-    for (const [value, label] of [[-4, '20h'], [-2, '22h'], [0, 'minuit'], [2, '2h'], [4, '4h'], [6, '6h']]) {
+    for (const value of labels) {
       const y = sy(value);
       E.E('line', {
         x1: 0, x2: f.iw, y1: y, y2: y,
@@ -114,7 +134,7 @@
       const t = E.E('text', {
         x: -8, y: y + 4, 'text-anchor': 'end', 'font-size': 11, fill: E.cssVar('--muted'),
       }, f.g);
-      t.textContent = label;
+      t.textContent = value === 0 ? 'minuit' : E.fmtClock(value);
     }
 
     const t0 = E.dateMs(rows[0].date);
@@ -125,14 +145,15 @@
 
     const pts = [];
     for (const r of rows) {
-      const clamped = Math.max(ymin, Math.min(ymax, r.bedRel));
       const x = sx(E.dateMs(r.date));
-      const y = sy(clamped);
+      const y = sy(r.bedRel);
       E.E('circle', {
         cx: x, cy: y, r: 2.6, fill: r.bedRel >= 2 ? late : normal, opacity: .5,
       }, f.g);
       pts.push({ x, y, row: r });
     }
+    const last = pts[pts.length - 1];
+    E.lastPoint(f, last, last.row.bedRel >= 2 ? late : normal, E.fmtClock(last.row.bedRel));
 
     E.hoverNearest(f, pts, p => ({
       title: E.fmtDate(p.row.date),
@@ -148,11 +169,12 @@
     const rows = model.sleep.distribution.filter(r => (r.count || r.value || 0) > 0);
     if (!rows.length) return E.drawEmpty(host);
 
-    const f = E.frame(host, { h: 220, w: 460, label: 'Distribution des durées de sommeil' });
     const counts = rows.map(r => r.count !== null && r.count !== undefined ? r.count : r.value);
-    const max = Math.max(...counts);
-    const top = Math.max(10, Math.ceil(max / 10) * 10);
-    const sy = E.grid(f, 0, top, [0, Math.round(top / 2), top], v => v);
+    const s = E.scaleOf(counts, { zero: true, fmt: v => E.fmtInt(v) });
+    const f = E.frame(host, {
+      h: 220, w: 460, gutter: s.gutter, label: 'Distribution des durées de sommeil',
+    });
+    const sy = E.grid(f, s);
     const bw = f.iw / rows.length;
     const good = E.cssVar('--good');
     const violet = E.cssVar('--s-violet');
@@ -166,8 +188,8 @@
         fill: inTarget ? good : violet, opacity: inTarget ? .85 : .8,
       }, f.g);
       const t = E.E('text', {
-        x: i * bw + bw / 2, y: f.ih + 18, 'text-anchor': 'middle',
-        'font-size': 11, fill: E.cssVar('--muted'),
+        x: E.clampLabelX(f, i * bw + bw / 2, r.label), y: f.ih + 18,
+        'text-anchor': 'middle', 'font-size': 11, fill: E.cssVar('--muted'),
       }, f.g);
       t.textContent = r.label;
       E.hoverShape(rect, r.label, [count + (count > 1 ? ' nuits' : ' nuit')]);
@@ -179,9 +201,14 @@
     const rows = model.sleep.dayOfWeek.filter(r => r.value !== null);
     if (!rows.length) return E.drawEmpty(host);
 
-    const f = E.frame(host, { h: 220, w: 460, label: 'Durée de sommeil par jour de semaine' });
-    const sy = E.grid(f, 0, 9, [0, 3, 6, 9], v => v + 'h');
-    E.targetBand(f, sy, 7, 9);
+    const s = E.scaleOf(rows.map(r => r.value).concat([TARGET_HOURS_HIGH]), {
+      zero: true, fmt: v => v + 'h',
+    });
+    const f = E.frame(host, {
+      h: 220, w: 460, gutter: s.gutter, label: 'Durée de sommeil par jour de semaine',
+    });
+    const sy = E.grid(f, s);
+    E.targetBand(f, sy, TARGET_HOURS, TARGET_HOURS_HIGH, 'cible');
     const bw = f.iw / rows.length;
     const violet = E.cssVar('--s-violet');
 
@@ -208,7 +235,13 @@
     });
   };
 
-  /** Répartition des stades par mois, en pourcentage du temps au lit. */
+  /**
+   * Répartition des stades par mois, en pourcentage du temps au lit.
+   *
+   * Quatre couleurs empilées et rien d'autre : à l'impression en niveaux de gris, les
+   * quatre stades deviennent quatre gris voisins. Chaque segment assez haut porte donc
+   * son pourcentage, seule marque qui survive au noir et blanc.
+   */
   charts['sleep-stages'] = function (host, model) {
     const rows = model.sleep.stagesMonthly;
     if (!rows.length) return E.drawEmpty(host, 'Aucun stade de sommeil enregistré.');
@@ -217,12 +250,18 @@
     // fond en thème sombre, et le stade disparaissait de la barre empilée.
     const colors = [E.cssVar('--s-violet'), E.cssVar('--s-blue'), E.cssVar('--s-aqua'), E.cssVar('--muted')];
     const names = ['Profond', 'Léger', 'Paradoxal (REM)', 'Éveil'];
-    E.legend(host, names.map((n, i) => [n, colors[i]]));
+    E.legend(host, names.map((n, i) => [n, colors[i], 'fill']));
 
-    const f = E.frame(host, { h: 250, label: 'Stades de sommeil par mois' });
-    const sy = E.grid(f, 0, 100, [0, 25, 50, 75, 100], v => v + ' %');
+    // Les quatre parts d'un même mois font 100 % : l'axe est celui de la grandeur, pas
+    // celui des données, et il ne varie pas d'un rapport à l'autre.
+    const s = E.scale(0, 100, { zero: true, capHigh: 100, fmt: v => v + ' %' });
+    const f = E.frame(host, { h: 250, gutter: s.gutter, label: 'Stades de sommeil par mois' });
+    const sy = E.grid(f, s);
     E.xBandAxis(f, rows.map(r => r.month), E.fmtMonth);
     const bw = f.iw / rows.length;
+
+    /** En deçà de cette hauteur, le chiffre déborderait de son segment. */
+    const MIN_LABEL_HEIGHT = 14;
 
     rows.forEach((r, i) => {
       const values = [r.deep, r.light, r.rem, r.awake];
@@ -231,10 +270,19 @@
         const v = value || 0;
         const y0 = sy(acc);
         const y1 = sy(acc + v);
+        const height = Math.max(0, y0 - y1 - 2);
         const rect = E.E('rect', {
           x: i * bw + bw * .12, y: y1, width: bw * .76,
-          height: Math.max(0, y0 - y1 - 2), rx: 3, fill: colors[k],
+          height, rx: 3, fill: colors[k],
         }, f.g);
+        if (height >= MIN_LABEL_HEIGHT && bw > 34) {
+          const t = E.E('text', {
+            x: i * bw + bw / 2, y: y1 + height / 2 + 3.5, 'text-anchor': 'middle',
+            class: 'ha-stage-label', 'font-size': 10, 'font-weight': 600,
+            fill: E.cssVar('--page'), style: 'font-variant-numeric:tabular-nums',
+          }, f.g);
+          t.textContent = Math.round(v) + ' %';
+        }
         E.hoverShape(rect, E.fmtMonth(r.month), [names[k] + ' : ' + E.fmtNum(v) + ' %']);
         acc += v;
       });

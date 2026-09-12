@@ -626,15 +626,13 @@ installé et lancé, les trois onglets, l'icône de réglages et l'import parcou
 plantage ; l'écran relu deux fois sur l'appareil, une fois avec des valeurs d'essai et une
 fois avec les vraies mesures — c'est la seconde qui a révélé les deux défauts ci-dessus.
 
-### Phase 3 — La hiérarchie du rapport — **livrée en partie**
+### Phase 3 — La hiérarchie du rapport — **livrée**
 
 Livré : essentiel et détail, deux chiffres de tête, phrases de lecture calculées, et les
 tableaux de tension et d'ECG qui remontent d'eux-mêmes dès qu'ils portent une ligne.
 
-**Non livré : la reprise du moteur de graphiques** (§ 5.4) — axes, grille, dernier point
-marqué, bandes cibles étiquetées, infobulle au toucher, doublage des couleurs pour le noir
-et blanc. C'est un chantier à part entière, et le séparer garde chaque livraison
-vérifiable seule.
+La reprise du moteur de graphiques (§ 5.4), d'abord reportée, a été livrée ensuite : voir
+plus bas.
 
 Trois décisions prises en cours de route :
 
@@ -654,12 +652,43 @@ que 9 avant dépliage — recentrés sur le nouveau contrat, et complétés par 
 manquait ; la promesse « rien ne disparaît » cassée exprès pour vérifier que le test la
 défend ; dépliage essayé au doigt dans la WebView Android ; APK publié installé et lancé.
 
-### Phase 4 — L'export médecin
+### Phase 4 — L'export médecin — **livrée**
 
 Gabarit de synthèse, règles d'impression A4.
 
-Vérification : export réel imprimé sur deux pages ; aucun texte de LLM dans le fichier ;
-le fichier s'ouvre sans réseau.
+Vérification : synthèse réelle produite sur l'appareil et ouverte depuis un dossier sans
+aucun asset ; deux à trois pages selon ce que la période porte ; aucun texte de LLM ;
+palette claire forcée à l'impression, sous la garde d'un test de parité.
+
+### Phase 3 bis — Le moteur de graphiques — **livrée**
+
+Les dix-neuf graphiques ne fixent plus ni leurs bornes ni leurs graduations : ils donnent
+l'étendue de leurs données à `E.scale`, qui rend un axe complet. Ce déplacement corrige
+d'un coup une famille de défauts que chaque graphique portait pour son compte.
+
+Cinq décisions prises en cours de route :
+
+1. **L'écrêtage disparaît partout.** Quatre graphiques rabattaient les valeurs hautes sur
+   leur plafond : le stress à 60, le sommeil à 12 h, la vitalité à 30 et 100,
+   l'oxygénation à 88 %. Une part de 91 % du temps au-dessus de 60 se lisait donc 60.
+2. **La marge gauche vient de l'étiquette la plus large**, mesurée avant de créer le SVG.
+   Elle valait 44 px en dur ; « 105 kg » en demande davantage et perdait son premier
+   caractère, coupé par le bord de la `viewBox`.
+3. **Cinq intervalles visés, et une grille dense coûte plus cher qu'une grille lâche.**
+   Avec quatre, un axe de poids allant de 35 à 90 kg prenait un pas de 20 et s'étendait
+   de 20 à 100, ce qui aplatissait les deux courbes au milieu du cadre.
+4. **La légende montre le trait de sa série, pas une pastille.** Une pastille imprimée en
+   niveaux de gris ne distingue plus rien. Conséquence : l'échantillon est un SVG, et les
+   deux garde-fous qui comptaient les graphiques en comptant les balises `svg` sont passés
+   au rouge — ils comptent maintenant `svg[role="img"]`.
+5. **La grille reste horizontale**, sauf pour les corrélations, dont les barres sont
+   horizontales : la grandeur s'y lit en abscisse, et les traits qui la jalonnent sont
+   forcément verticaux.
+
+Vérifié : 176 tests JS, 495 tests Kotlin, 0 échec ; dix-sept nouveaux tests, dont celui de
+l'écrêtage cassé exprès pour vérifier qu'il sait échouer ; les dix-huit axes relevés un par
+un ; lecture en niveaux de gris essayée sur la synthèse ; APK de débogage installé, lancé,
+et infobulle sortie au doigt dans la WebView.
 
 ### Phase 5 — Les états, le mouvement, l'accessibilité
 

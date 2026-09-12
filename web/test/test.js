@@ -663,6 +663,16 @@
   // visuel de report/smoke.html — aucune donnée de santé réelle n'y entre.
   // ======================================================================
 
+  /**
+   * Ce qui compte comme un graphique dans le DOM.
+   *
+   * Compter les `svg` tout court comptait aussi les échantillons de la légende, depuis
+   * qu'ils montrent le trait de leur série au lieu d'une pastille de couleur. Seul le
+   * cadre de dessin porte `role="img"` ; l'échantillon, purement décoratif, porte
+   * `aria-hidden`.
+   */
+  const CHART_SVG = 'svg[role="img"]';
+
   /** Le nombre de graphiques configurés dans SECTIONS + la carte des corrélations. */
   function countConfiguredCharts() {
     let n = 1; // CORRELATIONS_CARD, posée dans l'onglet Synthèse.
@@ -712,14 +722,14 @@
     const toutPanel = host.querySelector('.ha-tabpanel[data-tab="tout"]');
     const expected = countEssentialCharts();
     assertEqual(toutPanel.children.length, 0, 'Tout doit rester vide tant qu\'il n\'a pas été ouvert (paresse)');
-    const svgBefore = host.querySelectorAll('svg').length;
+    const svgBefore = host.querySelectorAll(CHART_SVG).length;
     assertEqual(svgBefore, expected, 'chaque graphique essentiel n\'est encore dessiné qu\'une fois, dans son propre onglet de domaine');
 
     host.querySelector('#ha-tab-tout').click();
 
-    assertEqual(toutPanel.querySelectorAll('svg').length, expected,
+    assertEqual(toutPanel.querySelectorAll(CHART_SVG).length, expected,
       'Tout redessine chaque graphique essentiel une seconde fois, une fois ouvert');
-    assertEqual(host.querySelectorAll('svg').length, svgBefore + expected,
+    assertEqual(host.querySelectorAll(CHART_SVG).length, svgBefore + expected,
       'ouvrir Tout ne doit pas redessiner les six autres panneaux, seulement construire le sien');
   });
 
@@ -729,9 +739,9 @@
     host.querySelector('#ha-tab-tout').click();
     const toutPanel = host.querySelector('.ha-tabpanel[data-tab="tout"]');
 
-    const avant = toutPanel.querySelectorAll('svg').length;
+    const avant = toutPanel.querySelectorAll(CHART_SVG).length;
     expandAllDetails(toutPanel);
-    const apres = toutPanel.querySelectorAll('svg').length;
+    const apres = toutPanel.querySelectorAll(CHART_SVG).length;
 
     // La hiérarchie range, elle n'enlève rien. C'est la promesse faite dans les specs :
     // « l'essentiel visible, le détail replié, rien ne disparaît ».
@@ -786,7 +796,7 @@
 
     const toutPanel = host.querySelector('.ha-tabpanel[data-tab="tout"]');
     assert(!toutPanel.hidden, 'Tout doit rester l\'onglet visible après le redessin');
-    assertEqual(toutPanel.querySelectorAll('svg').length, countEssentialCharts(),
+    assertEqual(toutPanel.querySelectorAll(CHART_SVG).length, countEssentialCharts(),
       'Tout doit être reconstruit tout de suite, pas au prochain clic');
   });
 
@@ -2244,6 +2254,253 @@
         assert(!phrase.includes(mot), 'la phrase de ' + key + ' porte un jugement : ' + phrase);
       }
     }
+  });
+
+  // ======================================================================
+  // report-engine.js — axes, graduations, dernier point, bandes cibles
+  //
+  // Le moteur est écrit une seule fois et sert les deux versions : ce que ces tests
+  // protègent vaut pour le navigateur comme pour la WebView Android.
+  //
+  // Les hôtes de dessin ne sont pas rattachés au document. C'est sans importance ici :
+  // le dessin passe par un `viewBox`, donc les coordonnées SVG ne dépendent pas de la
+  // largeur réelle du conteneur.
+  // ======================================================================
+
+  /** Les six mantisses qu'un pas d'axe lisible peut prendre, à la puissance de dix près. */
+  const NICE_MANTISSAS = [1, 2, 2.5, 5, 10];
+
+  function mantissaOf(step) {
+    const power = Math.pow(10, Math.floor(Math.log10(Math.abs(step))));
+    return Math.round((step / power) * 1000) / 1000;
+  }
+
+  test('E.scale ne pose que des graduations rondes, quelle que soit l\'étendue', () => {
+    const spans = [[0, 8437], [0, 12.4], [41, 78], [0, 1], [88.2, 99.8], [0, 250], [35.1, 37.4]];
+    for (const [min, max] of spans) {
+      const s = HA.engine.scale(min, max);
+      assert(s.ticks.length >= 2, `étendue ${min}–${max} : moins de deux graduations`);
+      const step = s.ticks[1] - s.ticks[0];
+      assert(NICE_MANTISSAS.indexOf(mantissaOf(step)) >= 0,
+        `le pas ${step} n'est pas un nombre rond (étendue ${min}–${max})`);
+      for (const t of s.ticks) {
+        const ratio = t / step;
+        assert(Math.abs(ratio - Math.round(ratio)) < 1e-6,
+          `la graduation ${t} n'est pas un multiple du pas ${step} (étendue ${min}–${max})`);
+      }
+    }
+  });
+
+  test('E.scale n\'étiquette jamais une valeur que les données dépassent de plus d\'un pas', () => {
+    // « Chaque étiquette nomme une valeur que le graphique atteint réellement. » Un axe
+    // qui monte à 10 000 pas quand le plus gros total en fait 3 000 écrase la courbe
+    // dans le bas du cadre et promet une plage que personne n'a atteinte.
+    //
+    // Ce garde-fou ne dit rien de la régularité du pas : c'est le test précédent qui
+    // s'en charge, et c'est lui qui refuse une grille comme 0, 3, 6, 7, 9, 12.
+    for (const [min, max] of [[0, 9.4], [41, 78], [0, 8437], [88.2, 99.8]]) {
+      const s = HA.engine.scale(min, max);
+      const step = s.ticks[1] - s.ticks[0];
+      assert(s.ticks[s.ticks.length - 1] - max <= step + 1e-9,
+        `la graduation haute ${s.ticks[s.ticks.length - 1]} dépasse le maximum ${max} de plus d'un pas`);
+      assert(min - s.ticks[0] <= step + 1e-9,
+        `la graduation basse ${s.ticks[0]} descend plus d'un pas sous le minimum ${min}`);
+    }
+  });
+
+  test('E.scale couvre toujours les données : plus aucun écrêtage', () => {
+    // Un écrêtage dessine une valeur que la personne n'a pas eue. Le graphique du stress
+    // bornait son axe à 60 et rabattait tout ce qui dépassait sur cette ligne.
+    for (const [min, max] of [[0, 78], [12, 12], [-4.5, 7.2], [0.3, 0.9]]) {
+      const s = HA.engine.scale(min, max);
+      assert(s.lo <= min + 1e-9, `l'échelle commence à ${s.lo}, au-dessus du minimum ${min}`);
+      assert(s.hi >= max - 1e-9, `l'échelle s'arrête à ${s.hi}, sous le maximum ${max}`);
+    }
+  });
+
+  test('E.scale garde le zéro comme base quand on le lui demande', () => {
+    const s = HA.engine.scale(2100, 8437, { zero: true });
+    assertEqual(s.lo, 0, 'une aire ou une barre se lit depuis zéro, sinon sa hauteur ment');
+    assertEqual(s.ticks[0], 0);
+  });
+
+  test('E.scale rend un intervalle utilisable sur des données constantes', () => {
+    const s = HA.engine.scale(72, 72);
+    assert(s.hi > s.lo, 'un intervalle nul diviserait par zéro et empilerait tout sur une ligne');
+    assert(s.ticks.length >= 2, 'au moins deux graduations');
+  });
+
+  test('E.scale réserve à gauche de quoi écrire son étiquette la plus large', () => {
+    const courte = HA.engine.scale(0, 9, { fmt: v => v + 'h' });
+    const large = HA.engine.scale(60, 105, { fmt: v => v + ' kg' });
+    assert(large.gutter > courte.gutter,
+      '« 105 kg » demande plus de place que « 9h » ; une marge fixe coupe la première');
+    assert(large.gutter >= HA.engine.textWidth('105 kg') + 8,
+      'la marge doit dépasser l\'étiquette, sinon le texte sort de la viewBox');
+  });
+
+  test('E.grid trace une ligne par graduation, toutes dans le cadre', () => {
+    const host = document.createElement('div');
+    const s = HA.engine.scale(0, 9.4, { zero: true, fmt: v => v + 'h' });
+    const f = HA.engine.frame(host, { h: 260, gutter: s.gutter, label: 'essai' });
+    HA.engine.grid(f, s);
+    const lines = Array.from(f.g.querySelectorAll('line'));
+    const horizontales = lines.filter(l => l.getAttribute('y1') === l.getAttribute('y2'));
+    assertEqual(horizontales.length, s.ticks.length + 1,
+      'une ligne par graduation, plus l\'axe du bas');
+    for (const l of horizontales) {
+      const y = Number(l.getAttribute('y1'));
+      assert(y >= -0.5 && y <= f.ih + 0.5, `une ligne de grille sort du cadre : y=${y}`);
+    }
+    assertEqual(lines.length, horizontales.length,
+      'la grille est horizontale seulement : aucune ligne verticale');
+  });
+
+  test('l\'axe temporel ne pose aucune ligne verticale dans la grille', () => {
+    const host = document.createElement('div');
+    const f = HA.engine.frame(host, { h: 220, label: 'essai' });
+    const t0 = HA.engine.dateMs('2025-01-01');
+    const t1 = HA.engine.dateMs('2025-12-31');
+    HA.engine.xTimeAxis(f, t0, t1);
+    const verticales = Array.from(f.g.querySelectorAll('line'))
+      .filter(l => l.getAttribute('x1') === l.getAttribute('x2')
+        && Number(l.getAttribute('y2')) - Number(l.getAttribute('y1')) > 20);
+    assertEqual(verticales.length, 0,
+      'des traits verticaux pleine hauteur quadrillent le fond et noient les marques');
+  });
+
+  test('les étiquettes de l\'axe temporel restent dans la viewBox', () => {
+    const host = document.createElement('div');
+    const f = HA.engine.frame(host, { h: 220, gutter: 46, label: 'essai' });
+    const t0 = HA.engine.dateMs('2025-01-01');
+    const t1 = HA.engine.dateMs('2025-12-31');
+    HA.engine.xTimeAxis(f, t0, t1);
+    for (const t of f.g.querySelectorAll('text')) {
+      const demi = HA.engine.textWidth(t.textContent) / 2;
+      const x = Number(t.getAttribute('x'));
+      assert(x - demi >= -f.m.l, `« ${t.textContent} » déborde à gauche de la viewBox`);
+      assert(x + demi <= f.iw + f.m.r, `« ${t.textContent} » déborde à droite de la viewBox`);
+    }
+  });
+
+  test('une bande cible porte son libellé, dans le cadre', () => {
+    const host = document.createElement('div');
+    const s = HA.engine.scale(0, 10, { zero: true });
+    const f = HA.engine.frame(host, { h: 260, gutter: s.gutter, label: 'essai' });
+    const sy = HA.engine.grid(f, s);
+    HA.engine.targetBand(f, sy, 7, 9, 'cible 7–9 h');
+    const textes = Array.from(f.g.querySelectorAll('text')).map(t => t.textContent);
+    assert(textes.indexOf('cible 7–9 h') >= 0,
+      'une bande sans libellé oblige à chercher sa signification ailleurs dans la page');
+  });
+
+  test('E.lastPoint marque le dernier point d\'une série', () => {
+    const host = document.createElement('div');
+    const f = HA.engine.frame(host, { h: 200, label: 'essai' });
+    HA.engine.lastPoint(f, { x: 100, y: 50 }, '#123456');
+    assert(f.g.querySelector('.ha-last'), 'le dernier point est l\'état actuel : il doit se voir');
+  });
+
+  test('chaque série quotidienne marque son dernier point', () => {
+    // L'œil cherche l'état d'aujourd'hui. Sans marque, il faut suivre la courbe jusqu'au
+    // bord et deviner où elle s'arrête.
+    const model = HA.smokeFixture.build();
+    for (const key of ['sleep-nightly', 'activity-steps', 'body-weight', 'stress-vitality']) {
+      const host = document.createElement('div');
+      HA.reportCharts[key](host, model);
+      assert(host.querySelector('.ha-last'), `${key} ne marque pas son dernier point`);
+    }
+  });
+
+  test('le graphique du stress ne rabat plus les valeurs élevées sur son axe', () => {
+    const model = HA.smokeFixture.build();
+    // Un mois vraiment tendu : le score moyen et la part du temps au-dessus de 60
+    // dépassent l'ancien plafond de 60.
+    model.stress.monthly = [
+      { month: '2026-07', mean: 34, percentAbove60: 21 },
+      { month: '2026-08', mean: 78, percentAbove60: 91 },
+    ];
+    const host = document.createElement('div');
+    HA.reportCharts['stress-monthly'](host, model);
+    const textes = Array.from(host.querySelectorAll('text')).map(t => t.textContent);
+    const graduations = textes.map(t => Number(String(t).replace(',', '.')))
+      .filter(v => Number.isFinite(v));
+    assert(Math.max(...graduations) >= 91,
+      'l\'axe doit monter au moins jusqu\'à la plus forte valeur, sinon elle est dessinée ailleurs');
+  });
+
+  test('une valeur haute isolée n\'est plus rabattue sur le haut du cadre', () => {
+    // L'écrêtage était écrit à la main dans chaque graphique, sous la forme
+    // `Math.min(valeur, plafond)`. Une nuit de 13 h se dessinait alors exactement à la
+    // même hauteur qu'une nuit de 12 h, et rien ne le signalait.
+    const model = HA.smokeFixture.build();
+    const jour = i => '2026-0' + (i < 9 ? '1-0' + (i + 1) : '1-' + (i + 1));
+    model.sleep.nightly = [];
+    for (let i = 0; i < 10; i++) {
+      model.sleep.nightly.push({
+        date: jour(i), hours: i === 9 ? 13.2 : 6.4, score: 70, sessions: 1,
+        bedRel: -1, wakeRel: 6,
+      });
+    }
+    const host = document.createElement('div');
+    HA.reportCharts['sleep-nightly'](host, model);
+
+    // Le point de survol est créé sans coordonnées et ne les reçoit qu'au premier
+    // mouvement : le laisser entrer ici ferait lire une hauteur de zéro.
+    const hauteurs = Array.from(host.querySelectorAll('svg circle'))
+      .filter(c => c.hasAttribute('cy'))
+      .map(c => Number(c.getAttribute('cy')))
+      .filter(Number.isFinite);
+    const plusHaut = Math.min(...hauteurs);
+    const autres = hauteurs.filter(y => y > plusHaut + 0.5);
+    assert(autres.length > 0, 'la nuit de 13 h doit se détacher des nuits de 6 h');
+    assert(plusHaut > 0, 'aucune marque ne doit toucher le bord haut du cadre');
+  });
+
+  test('deux séries d\'un même graphique se distinguent sans la couleur', () => {
+    // Vérifiable en imprimant en niveaux de gris : deux traits pleins de teintes
+    // différentes y deviennent deux traits gris identiques.
+    const model = HA.smokeFixture.build();
+    for (const key of ['heart-monthly', 'body-weight']) {
+      const host = document.createElement('div');
+      HA.reportCharts[key](host, model);
+      const motifs = Array.from(host.querySelectorAll('svg path[stroke]'))
+        .map(p => p.getAttribute('stroke-dasharray') || 'plein');
+      const distincts = new Set(motifs);
+      assert(distincts.size >= 2,
+        `${key} trace ${motifs.length} séries avec un seul style de trait : ${[...distincts]}`);
+    }
+  });
+
+  test('la légende montre le style de trait de chaque série, pas seulement sa couleur', () => {
+    const host = document.createElement('div');
+    HA.engine.legend(host, [
+      ['Pleine', '#111111', null],
+      ['Tiretée', '#222222', '7,4'],
+    ]);
+    const traits = host.querySelectorAll('.ha-legend svg line');
+    assertEqual(traits.length, 2, 'chaque entrée porte un trait, pas une pastille de couleur');
+    assertEqual(traits[1].getAttribute('stroke-dasharray'), '7,4');
+  });
+
+  test('l\'infobulle reste dans la fenêtre, même tout en bas', () => {
+    HA.engine.showTooltip('Titre', ['une ligne'], 10, (window.innerHeight || 800) - 4);
+    const tt = document.querySelector('.ha-tooltip');
+    const top = parseFloat(tt.style.top);
+    assert(top + tt.offsetHeight <= (window.innerHeight || 800),
+      'une infobulle qui sort par le bas est illisible au doigt, là où le pouce est déjà');
+    HA.engine.hideTooltip();
+  });
+
+  test('les stades de sommeil portent leur pourcentage dans la barre', () => {
+    // La barre empilée a quatre couleurs et aucune autre différence. Sur une impression
+    // en niveaux de gris, le chiffre est la seule chose qui reste lisible.
+    const model = HA.smokeFixture.build();
+    const host = document.createElement('div');
+    HA.reportCharts['sleep-stages'](host, model);
+    const chiffres = Array.from(host.querySelectorAll('svg text'))
+      .filter(t => /\d/.test(t.textContent) && t.classList.contains('ha-stage-label'));
+    assert(chiffres.length > 0, 'aucun stade n\'est étiqueté dans sa barre');
   });
 
   async function runAll() {

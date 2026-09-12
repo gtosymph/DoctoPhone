@@ -18,6 +18,18 @@ Conséquence : un graphique corrigé profite aux deux versions. Ne réécris pas
 graphique en Compose « pour faire natif », cela recréerait la divergence que ce choix
 supprime.
 
+### L'échelle vient des données, jamais du graphique
+
+Aucun graphique ne fixe ses bornes ni ses graduations. Il passe le minimum et le maximum
+de ses mesures à `E.scale`, qui rend `{lo, hi, ticks, fmt, gutter}` : bornes rondes qui
+**couvrent** les données, pas qui les rabattent, et la largeur à réserver à gauche pour
+que l'étiquette la plus longue tienne dans la `viewBox`.
+
+Quatre graphiques bornaient autrefois leur axe à la main et écrêtaient le reste
+(`Math.min(valeur, plafond)`) : une part de 91 % du temps de stress au-dessus de 60 se
+dessinait à 60, sans le moindre message. **Un axe décidé à l'avance finit toujours par
+mentir sur les mesures.** N'en réintroduisez pas.
+
 ## Le modèle peut répondre avec des graphiques
 
 L'onglet de conversation accepte que le LLM renvoie un graphique, dans un bloc de code

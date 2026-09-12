@@ -16,6 +16,11 @@
   /** Au-delà de ce trou, la courbe se coupe. */
   const MAX_GAP_DAYS = 14;
 
+  /** Les pas se lisent en milliers : « 10k » tient là où « 10 000 » déborde. */
+  function kSteps(v) {
+    return (Math.round(v / 100) / 10).toString().replace('.', ',') + 'k';
+  }
+
   const charts = {};
 
   /** Pas quotidiens, en moyenne glissante sur 7 jours. */
@@ -23,16 +28,16 @@
     const rows = model.activity.stepsRolling7.filter(r => r.value !== null);
     if (!rows.length) return E.drawEmpty(host, 'Aucun pas enregistré sur cette période.');
 
+    // L'objectif entre dans l'étendue : une bande cible hors du cadre ne se lit pas.
+    const s = E.scaleOf(rows.map(r => r.value).concat([STEPS_TARGET_HIGH]), {
+      zero: true, fmt: kSteps,
+    });
     const f = E.frame(host, {
-      h: 260, m: { l: 52, r: 14, t: 14, b: 30 },
+      h: 260, gutter: s.gutter,
       label: 'Pas quotidiens, moyenne glissante sur 7 jours',
     });
-    const peak = Math.max(...rows.map(r => r.value), STEPS_TARGET_HIGH);
-    const top = Math.ceil(peak / 2000) * 2000;
-    const ticks = [];
-    for (let v = 0; v <= top; v += Math.max(2000, Math.round(top / 4 / 1000) * 1000)) ticks.push(v);
-    const sy = E.grid(f, 0, top, ticks, v => (v / 1000) + 'k');
-    E.targetBand(f, sy, STEPS_TARGET_LOW, STEPS_TARGET_HIGH);
+    const sy = E.grid(f, s);
+    E.targetBand(f, sy, STEPS_TARGET_LOW, STEPS_TARGET_HIGH, 'objectif 7 à 8 k pas');
 
     const t0 = E.dateMs(rows[0].date);
     const t1 = E.dateMs(rows[rows.length - 1].date);
@@ -41,14 +46,13 @@
 
     const pts = rows.map(r => {
       const t = E.dateMs(r.date);
-      return { x: sx(t), y: sy(Math.min(r.value, top)), t, row: r };
+      return { x: sx(t), y: sy(r.value), t, row: r };
     });
-
-    for (const seg of E.segments(pts, MAX_GAP_DAYS * E.DAY_MS)) {
-      if (seg.length < 2) continue;
-      E.E('path', { d: E.areaPath(seg, f.ih), fill: aqua, opacity: .15 }, f.g);
-      E.E('path', { d: E.linePath(seg), fill: 'none', stroke: aqua, 'stroke-width': 2 }, f.g);
-    }
+    E.drawSeries(f, pts, {
+      color: aqua, width: 2, maxGapMs: MAX_GAP_DAYS * E.DAY_MS, area: f.ih,
+    });
+    const last = pts[pts.length - 1];
+    E.lastPoint(f, last, aqua, E.fmtInt(last.row.value));
 
     E.hoverNearest(f, pts, p => ({
       title: E.fmtDate(p.row.date),
@@ -61,13 +65,11 @@
     const rows = model.activity.stepsDayOfWeek.filter(r => r.value !== null);
     if (!rows.length) return E.drawEmpty(host);
 
+    const s = E.scaleOf(rows.map(r => r.value), { zero: true, fmt: kSteps });
     const f = E.frame(host, {
-      h: 220, w: 460, m: { l: 46, r: 14, t: 14, b: 30 },
-      label: 'Pas par jour de semaine',
+      h: 220, w: 460, gutter: s.gutter, label: 'Pas par jour de semaine',
     });
-    const top = Math.ceil(Math.max(...rows.map(r => r.value)) / 2000) * 2000 || 2000;
-    const ticks = [0, top / 2, top];
-    const sy = E.grid(f, 0, top, ticks, v => (v / 1000) + 'k');
+    const sy = E.grid(f, s);
     const bw = f.iw / rows.length;
     const aqua = E.cssVar('--s-aqua');
 
@@ -93,9 +95,13 @@
     const rows = model.activity.exerciseMonthly.filter(r => r.minutes > 0);
     if (!rows.length) return E.drawEmpty(host, 'Aucune séance d\'exercice enregistrée.');
 
-    const f = E.frame(host, { h: 220, w: 460, label: 'Minutes d\'exercice par mois' });
-    const top = Math.ceil(Math.max(...rows.map(r => r.minutes)) / 50) * 50 || 50;
-    const sy = E.grid(f, 0, top, [0, top / 2, top], v => Math.round(v) + ' min');
+    const s = E.scaleOf(rows.map(r => r.minutes), {
+      zero: true, fmt: v => E.fmtInt(v) + ' min',
+    });
+    const f = E.frame(host, {
+      h: 220, w: 460, gutter: s.gutter, label: 'Minutes d\'exercice par mois',
+    });
+    const sy = E.grid(f, s);
     E.xBandAxis(f, rows.map(r => r.month), E.fmtMonth);
     const bw = f.iw / rows.length;
     const aqua = E.cssVar('--s-aqua');
@@ -119,9 +125,11 @@
     const rows = model.activity.floorsMonthly.filter(r => r.value !== null && r.value > 0);
     if (!rows.length) return E.drawEmpty(host, 'Aucun étage enregistré.');
 
-    const f = E.frame(host, { h: 200, w: 460, label: 'Étages montés par mois' });
-    const top = Math.ceil(Math.max(...rows.map(r => r.value)) / 50) * 50 || 50;
-    const sy = E.grid(f, 0, top, [0, top / 2, top], v => Math.round(v));
+    const s = E.scaleOf(rows.map(r => r.value), { zero: true, fmt: v => E.fmtInt(v) });
+    const f = E.frame(host, {
+      h: 200, w: 460, gutter: s.gutter, label: 'Étages montés par mois',
+    });
+    const sy = E.grid(f, s);
     E.xBandAxis(f, rows.map(r => r.month), E.fmtMonth);
     const bw = f.iw / rows.length;
     const yellow = E.cssVar('--s-yellow');

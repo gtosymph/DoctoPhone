@@ -13,17 +13,6 @@
 
   const charts = {};
 
-  /** Choisit des graduations rondes qui encadrent les valeurs présentes. */
-  function niceBounds(values, step, pad) {
-    const clean = values.filter(v => v !== null && v !== undefined && isFinite(v));
-    if (!clean.length) return null;
-    const lo = Math.floor((Math.min(...clean) - pad) / step) * step;
-    const hi = Math.ceil((Math.max(...clean) + pad) / step) * step;
-    const ticks = [];
-    for (let v = lo; v <= hi; v += step) ticks.push(v);
-    return { lo, hi, ticks };
-  }
-
   /** Fréquence cardiaque de repos et fréquence moyenne, mois par mois. */
   charts['heart-monthly'] = function (host, model) {
     const rows = model.heart.monthly.filter(r => r.resting !== null || r.average !== null);
@@ -31,14 +20,20 @@
 
     const blue = E.cssVar('--s-blue');
     const magenta = E.cssVar('--s-magenta');
-    E.legend(host, [['FC de repos', blue], ['FC moyenne', magenta]]);
+    // La FC moyenne est tiretée : deux traits pleins de teintes différentes deviennent
+    // deux traits gris identiques sur une impression en niveaux de gris.
+    E.legend(host, [
+      ['FC de repos', blue, E.DASH.solid],
+      ['FC moyenne', magenta, E.DASH.dashed],
+    ]);
 
-    const f = E.frame(host, { h: 240, w: 460, label: 'Fréquence cardiaque par mois' });
-    const bounds = niceBounds(
-      rows.flatMap(r => [r.resting, r.average]), 10, 5,
-    );
-    if (!bounds) return E.drawEmpty(host);
-    const sy = E.grid(f, bounds.lo, bounds.hi, bounds.ticks, v => v);
+    const s = E.scaleOf(rows.flatMap(r => [r.resting, r.average]), { fmt: v => E.fmtInt(v) });
+    if (!s) return E.drawEmpty(host);
+
+    const f = E.frame(host, {
+      h: 240, w: 460, gutter: s.gutter, label: 'Fréquence cardiaque par mois',
+    });
+    const sy = E.grid(f, s);
     const cx = E.xBandAxis(f, rows.map(r => r.month), E.fmtMonth);
 
     const resting = [];
@@ -52,13 +47,12 @@
       }
     });
 
-    if (average.length > 1) {
-      E.E('path', { d: E.linePath(average), fill: 'none', stroke: magenta, 'stroke-width': 2 }, f.g);
-    }
-    if (resting.length > 1) {
-      E.E('path', { d: E.linePath(resting), fill: 'none', stroke: blue, 'stroke-width': 2.5 }, f.g);
-    }
+    E.drawSeries(f, average, { color: magenta, width: 2, dash: E.DASH.dashed });
+    E.drawSeries(f, resting, { color: blue, width: 2.5 });
     resting.forEach(p => E.E('circle', { cx: p.x, cy: p.y, r: 3, fill: blue }, f.g));
+
+    const last = resting[resting.length - 1];
+    if (last) E.lastPoint(f, last, blue, E.fmtInt(last.row.resting));
 
     E.hoverNearest(f, resting, p => ({
       title: E.fmtMonth(p.row.month),
@@ -74,18 +68,22 @@
     const rows = model.heart.hrvMonthly.filter(r => r.value !== null);
     if (!rows.length) return E.drawEmpty(host, 'Aucune mesure de variabilité cardiaque.');
 
-    const f = E.frame(host, { h: 240, w: 460, label: 'Variabilité cardiaque RMSSD par mois' });
-    const bounds = niceBounds(rows.map(r => r.value), 10, 5);
-    if (!bounds) return E.drawEmpty(host);
-    const sy = E.grid(f, bounds.lo, bounds.hi, bounds.ticks, v => v + ' ms');
+    const s = E.scaleOf(rows.map(r => r.value), { fmt: v => E.fmtInt(v) + ' ms' });
+    if (!s) return E.drawEmpty(host);
+
+    const f = E.frame(host, {
+      h: 240, w: 460, gutter: s.gutter, label: 'Variabilité cardiaque RMSSD par mois',
+    });
+    const sy = E.grid(f, s);
     const cx = E.xBandAxis(f, rows.map(r => r.month), E.fmtMonth);
     const aqua = E.cssVar('--s-aqua');
 
     const pts = rows.map((r, i) => ({ x: cx(i), y: sy(r.value), row: r }));
-    if (pts.length > 1) {
-      E.E('path', { d: E.linePath(pts), fill: 'none', stroke: aqua, 'stroke-width': 2.5 }, f.g);
-    }
+    E.drawSeries(f, pts, { color: aqua, width: 2.5 });
     pts.forEach(p => E.E('circle', { cx: p.x, cy: p.y, r: 3, fill: aqua }, f.g));
+
+    const last = pts[pts.length - 1];
+    E.lastPoint(f, last, aqua, E.fmtInt(last.row.value));
 
     E.hoverNearest(f, pts, p => ({
       title: E.fmtMonth(p.row.month),
@@ -93,20 +91,28 @@
     }));
   };
 
-  /** Profil horaire de la fréquence cardiaque, moyenne sur toute la période. */
+  /**
+   * Profil horaire de la fréquence cardiaque, moyenne sur toute la période.
+   *
+   * Pas de marque de dernier point : l'axe n'est pas le temps mais l'heure du jour, et
+   * « 23 h » n'est pas plus récent que « 0 h ».
+   */
   charts['heart-hourly'] = function (host, model) {
     const rows = model.heart.hourly.filter(r => r.value !== null);
     if (rows.length < 6) return E.drawEmpty(host, 'Pas assez de mesures pour un profil horaire.');
 
-    const f = E.frame(host, { h: 220, w: 460, label: 'Fréquence cardiaque par heure' });
-    const bounds = niceBounds(rows.map(r => r.value), 10, 5);
-    if (!bounds) return E.drawEmpty(host);
-    const sy = E.grid(f, bounds.lo, bounds.hi, bounds.ticks, v => v);
+    const s = E.scaleOf(rows.map(r => r.value), { fmt: v => E.fmtInt(v) });
+    if (!s) return E.drawEmpty(host);
+
+    const f = E.frame(host, {
+      h: 220, w: 460, gutter: s.gutter, label: 'Fréquence cardiaque par heure',
+    });
+    const sy = E.grid(f, s);
     const sx = h => Number(h) / 23 * f.iw;
 
     for (const h of [0, 6, 12, 18, 23]) {
       const t = E.E('text', {
-        x: sx(h), y: f.ih + 18, 'text-anchor': 'middle',
+        x: E.clampLabelX(f, sx(h), h + 'h'), y: f.ih + 18, 'text-anchor': 'middle',
         'font-size': 11, fill: E.cssVar('--muted'),
       }, f.g);
       t.textContent = h + 'h';
@@ -114,8 +120,7 @@
 
     const blue = E.cssVar('--s-blue');
     const pts = rows.map(r => ({ x: sx(r.label), y: sy(r.value), row: r }));
-    E.E('path', { d: E.areaPath(pts, f.ih), fill: blue, opacity: .14 }, f.g);
-    E.E('path', { d: E.linePath(pts), fill: 'none', stroke: blue, 'stroke-width': 2.5 }, f.g);
+    E.drawSeries(f, pts, { color: blue, width: 2.5, area: f.ih, areaOpacity: .14 });
 
     E.hoverNearest(f, pts, p => ({
       title: p.row.label + 'h',
@@ -129,6 +134,10 @@
    * Une barre vers la droite marque une association positive. Le coefficient n'a de
    * sens qu'au-delà d'un certain nombre de jours appariés ; le constructeur du modèle a
    * déjà écarté les paires trop rares.
+   *
+   * Seul graphique à grille verticale, et pour une raison de fond : les barres sont
+   * horizontales, donc la grandeur se lit sur l'axe des abscisses. Les traits qui la
+   * jalonnent sont forcément verticaux.
    */
   charts['heart-correlations'] = function (host, model) {
     const rows = model.correlations.slice().sort((a, b) => Math.abs(b.r) - Math.abs(a.r));

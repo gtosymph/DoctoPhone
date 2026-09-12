@@ -115,17 +115,15 @@
     const clean = all.filter(v => v !== null && v !== undefined && isFinite(v));
     if (!clean.length) return null;
 
-    let lo = Math.min(...clean);
-    let hi = Math.max(...clean);
-    if (lo === hi) { lo -= 1; hi += 1; }
-    const span = hi - lo;
-    const step = Math.pow(10, Math.floor(Math.log10(span / 3)));
-    const rounded = [1, 2, 2.5, 5, 10].map(m => m * step).find(s => span / s <= 5) || step * 10;
-    lo = Math.floor(lo / rounded) * rounded;
-    hi = Math.ceil(hi / rounded) * rounded;
-    const ticks = [];
-    for (let v = lo; v <= hi + rounded / 2; v += rounded) ticks.push(Number(v.toFixed(6)));
-    return { lo, hi, ticks };
+    // L'axe vient du moteur partagé, comme celui des dix-neuf graphiques du rapport :
+    // un graphique demandé en conversation se lit exactement comme les autres.
+    //
+    // Seules les trois bornes sont gardées. La mise en forme d'une graduation dépend de
+    // l'unité, connue au dessin, et une fonction ne survivrait pas à la sérialisation de
+    // la spécification, qui est gravée sur le message auquel elle appartient.
+    const s = E().scaleOf(clean);
+    if (!s) return null;
+    return { lo: s.lo, hi: s.hi, ticks: s.ticks };
   }
 
   /**
@@ -241,23 +239,38 @@
     };
   }
 
+  /**
+   * Le style de trait d'une série, pour que deux courbes se distinguent sans la couleur.
+   *
+   * Une barre ne porte pas de trait : son échantillon de légende reste un aplat.
+   */
+  function dashFor(mark, index) {
+    if (mark === 'bar') return 'fill';
+    const dashes = [null, E().DASH.dashed, E().DASH.dotted, E().DASH.dashDot];
+    return dashes[index % dashes.length];
+  }
+
   /** Dessine une spécification déjà validée. */
   function draw(host, spec) {
     const e = E();
     host.textContent = '';
     const compact = e.isCompact();
+    const fmt = v => formatTick(v, spec.unit);
+    let gutter = 0;
+    for (const t of spec.scale.ticks) gutter = Math.max(gutter, e.textWidth(fmt(t)));
+
     const f = e.frame(host, {
       h: 250,
       w: compact ? 460 : 920,
-      m: { t: 14, r: 14, b: 30, l: 52 },
+      gutter: Math.ceil(gutter) + 12,
       label: spec.title,
     });
 
-    const sy = e.grid(f, spec.scale.lo, spec.scale.hi, spec.scale.ticks, v => formatTick(v, spec.unit));
-    if (spec.targetBand) e.targetBand(f, sy, spec.targetBand.low, spec.targetBand.high);
+    const sy = e.grid(f, { lo: spec.scale.lo, hi: spec.scale.hi, ticks: spec.scale.ticks, fmt });
+    if (spec.targetBand) e.targetBand(f, sy, spec.targetBand.low, spec.targetBand.high, 'cible');
 
     if (spec.series.length > 1) {
-      e.legend(host, spec.series.map(s => [s.label, e.cssVar(s.color)]));
+      e.legend(host, spec.series.map((s, i) => [s.label, e.cssVar(s.color), dashFor(spec.mark, i)]));
       host.insertBefore(host.lastChild, f.svg);
     }
 
@@ -306,6 +319,7 @@
         e.E('path', {
           d: e.linePath(pts), fill: 'none', stroke: color,
           'stroke-width': 2.2, 'stroke-linejoin': 'round',
+          'stroke-dasharray': dashFor(spec.mark, seriesIndex),
         }, f.g);
       }
 
