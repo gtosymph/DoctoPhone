@@ -762,21 +762,26 @@ calcul lui-même vérifié sur trois valeurs de référence — dont une que j'a
 
 ## 13. Ce qui reste à arbitrer
 
-1. **La paire de polices.** Source Serif 4 et Public Sans sont un choix sobre. Une serif
-   plus marquée (Fraunces) donnerait davantage de caractère, au risque du maniérisme sur un
-   document médical.
+*Plus rien. Les six points sont tranchés ; ils restent ici parce qu'une décision sans sa
+raison se redéfait toute seule six mois plus tard.*
+
+1. ~~**La paire de polices.**~~ Source Serif 4 est gardée. Fraunces donnerait davantage de
+   caractère, au risque du maniérisme sur un document qu'un médecin va lire. La paire
+   actuelle est sobre, déjà embarquée, sous-ensemblée et vérifiée à l'impression.
 2. ~~**Le poids du rapport exporté.**~~ Tranchée par la mesure : la serif 600 seule pèse
    31 Ko en base64, pas 80. Le coût est assez faible pour ne plus poser question, et
    l'option est en place.
-3. **L'onglet « Tout » du rapport.** Il répète le contenu de tous les autres. Il reste
-   utile pour chercher dans la page ; il double la longueur du document.
-4. **Les couleurs de domaine sur l'écran d'accueil.** La charte actuelle les réserve aux
-   données de santé et interdit qu'un écran entier porte une seule couleur. L'écran
-   « Cette semaine » porte six domaines à la fois : la règle tient, mais elle mérite d'être
-   confirmée.
-5. **La notification hebdomadaire existe déjà et se déclenche.** `WeeklyDriftCheckWorker`
-   appelle `DriftNotifier` dès qu'une dérive est détectée, sur le canal « Bilans de
-   santé », avec le titre « Bilan de la semaine : n mesures ont changé ». La question
-   n'est donc pas de la créer, mais de décider si elle doit mener au nouvel écran
-   « Cette semaine » plutôt qu'à `MainActivity` — et si elle doit aussi se déclencher
-   sans dérive, pour marquer le rendez-vous hebdomadaire.
+3. ~~**L'onglet « Tout » du rapport.**~~ Gardé tel quel. Il sert à chercher dans la page et
+   à imprimer d'un coup, et son coût est déjà contenu : il ne se dessine qu'à sa première
+   ouverture, donc il ne pèse rien tant que personne ne le touche.
+4. ~~**Les couleurs de domaine sur l'écran d'accueil.**~~ Confirmée à l'usage : l'écran
+   « Cette semaine » porte les six domaines côte à côte depuis la phase 2, et la règle
+   tient — aucune couleur ne domine l'écran, chacune reste rattachée à sa mesure.
+5. ~~**La notification doit-elle mener à « Cette semaine » ?**~~ Réglée sans écrire une
+   ligne : `DriftNotifier` ouvre `MainActivity`, dont la destination de départ est devenue
+   `WEEK` en phase 2. La notification tombe donc déjà sur l'écran qui montre exactement ce
+   qu'elle annonce.
+6. ~~**La notification doit-elle aussi se déclencher sans dérive ?**~~ Non. Le rendez-vous
+   hebdomadaire plaidait pour, mais une notification qui arrive pour dire que rien n'a
+   changé apprend à les ignorer toutes, y compris celle qui comptera un jour. L'app
+   n'interrompt que lorsqu'elle a quelque chose à dire.
