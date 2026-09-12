@@ -114,6 +114,26 @@ class ThemeTokenParityTest {
     }
 
     @Test
+    fun `la palette d'impression reprend exactement les valeurs du theme clair`() {
+        val css = readReportCss() ?: return
+
+        // Une synthèse ouverte sur un appareil en thème sombre s'imprimerait en encre
+        // claire — du texte blanc sur du papier blanc. Le bloc `@media print` remet donc la
+        // palette claire à plat, et ce doublon-là doit suivre l'original.
+        val light = lightTokens() ?: return
+        val print = parseTokens(css, "@media print {")
+
+        assertTrue("Aucun jeton trouvé dans le bloc d'impression.", print.size > 8)
+        print.forEach { (name, value) ->
+            assertEquals(
+                "$name diverge entre le thème clair et la palette d'impression.",
+                light[name],
+                value,
+            )
+        }
+    }
+
+    @Test
     fun `les bornes que l'export utilise pour remplacer les polices sont bien la`() {
         val css = readReportCss() ?: return
 

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synthèse de santé</title>
+<!--
+  Synthèse de santé, une à deux pages, destinée à être imprimée et remise à un médecin.
+
+  Ce fichier est autonome : styles, moteur de dessin et données sont inclus ci-dessous. Il
+  s'ouvre dans n'importe quel navigateur, sans réseau, et il s'imprime tel quel.
+
+  ATTENTION : ce fichier contient vos mesures de santé. Ne le partagez qu'avec des
+  personnes à qui vous voulez les confier.
+
+  Ce gabarit suit le même contrat que `export-template.html`, avec un marqueur de plus.
+  Chacun est présent une seule fois plus bas : celui des styles, dans la balise « style » ;
+  celui des scripts, dans la première balise « script » ; celui du modèle et celui du bilan
+  hebdomadaire, chacun dans sa balise de type application/json.
+
+  Ce commentaire ne les écrit pas littéralement, et c'est volontaire. Les citer ici en
+  créerait une seconde occurrence, et un remplacement qui ne traite que la première
+  laisserait le vrai emplacement intact. Le défaut s'est produit sur l'autre gabarit ; ne
+  le réintroduisez pas.
+
+  Le JSON doit être échappé avant d'être posé : chaque caractère inférieur y devient sa
+  séquence Unicode u003c. Sans cela, une chaîne contenant une balise fermante de script
+  couperait le document en deux.
+
+  Le bilan hebdomadaire peut valoir « null » : la version web de l'application n'a pas de
+  moteur de dérives. La synthèse s'ouvre alors directement sur la période.
+-->
+<style>
+{{STYLES}}
+</style>
+</head>
+<body>
+<div id="ha-root"></div>
+<script>
+{{SCRIPTS}}
+</script>
+<script id="ha-model" type="application/json">{{MODEL}}</script>
+<script id="ha-review" type="application/json">{{REVIEW}}</script>
+<script>
+(function (global) {
+  'use strict';
+
+  function read(id) {
+    const node = document.getElementById(id);
+    if (!node) return null;
+    const raw = node.textContent.trim();
+    if (!raw || raw === 'null') return null;
+    return JSON.parse(raw);
+  }
+
+  const root = document.getElementById('ha-root');
+  try {
+    global.HA.reportSummary.renderSummary(root, read('ha-model'), read('ha-review'));
+  } catch (error) {
+    root.textContent = 'Cette synthèse n\'a pas pu être lue.';
+    if (global.console) global.console.error('[synthèse] illisible', error);
+  }
+}(window));
+</script>
+</body>
+</html>

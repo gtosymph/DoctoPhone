@@ -22,6 +22,7 @@
 <div id="bar">
   <b>Essai du moteur</b>
   <button id="theme">Basculer le thème</button>
+  <button id="summary" type="button">Synthèse médecin</button>
   <button id="empty">Modèle vide</button>
   <button id="full">Modèle complet</button>
   <span id="status">—</span>
@@ -36,6 +37,7 @@
 <script src="report-charts-vitals.js"></script>
 <script src="report-sections.js"></script>
 <script src="report-render.js"></script>
+<script src="report-summary.js"></script>
 <script src="smoke-fixture.js"></script>
 <script>
 /**
@@ -79,6 +81,26 @@
   document.getElementById('full').addEventListener('click', function () {
     draw(global.HA.smokeFixture.build());
   });
+  document.getElementById('summary').addEventListener('click', function () {
+    // Une synthèse avec son bloc hebdomadaire, tel que Kotlin le fournit : que des chaînes
+    // déjà formatées, aucun calcul de ce côté.
+    global.HA.reportSummary.renderSummary(root, HA.smokeFixture.build(), {
+      periodLabel: 'du 5 au 11 septembre 2026',
+      metrics: [
+        { label: 'Durée de sommeil', recent: '5 h 12', baseline: '6 h 20', delta: '−1 h 08', note: null },
+        { label: 'Régularité du coucher', recent: '1,9 h', baseline: '1,1 h', delta: '+0,8 h', note: null },
+        { label: 'Fréquence cardiaque de repos', recent: '59 bpm', baseline: '54 bpm', delta: '+5 bpm', note: null },
+        { label: 'Variabilité cardiaque (HRV)', recent: '39,8 ms', baseline: '41,2 ms', delta: '−1,4 ms', note: null },
+        { label: 'Pas quotidiens', recent: '9 120 pas', baseline: '8 340 pas', delta: '+780 pas', note: '4 jours mesurés sur 7' },
+        { label: 'Poids', recent: '—', baseline: '—', delta: null, note: null },
+      ],
+      drifts: [
+        'Durée de sommeil : 6 h 20 en moyenne ces dernières semaines, 5 h 12 sur la semaine écoulée.',
+      ],
+      readinessKind: 'ready', readinessMeasuredDays: 0, readinessRequiredDays: 0,
+    });
+  });
+
   document.getElementById('empty').addEventListener('click', function () {
     draw(global.HA.reportModel.emptyReportModel());
   });

@@ -23,7 +23,7 @@ Ces douze points sont arbitrés. Le reste du document les développe.
 | 7 | Un écran d'accueil natif « Cette semaine », en Compose, pas en WebView. |
 | 8 | Le rapport garde ses 19 graphiques, mais les hiérarchise : l'essentiel visible, le détail replié. |
 | 9 | Chaque graphique gagne une phrase de lecture **calculée**, jamais écrite par le LLM. |
-| 10 | Un nouvel export « synthèse médecin » de une à deux pages A4, à côté du rapport complet. |
+| 10 | Un nouvel export « synthèse médecin » de deux à trois pages A4, à côté du rapport complet. |
 | 11 | Le moteur de graphiques SVG est repris en profondeur, sans aucune bibliothèque ajoutée. |
 | 12 | Livraison en cinq phases vérifiables une par une. |
 
@@ -430,6 +430,13 @@ même feuille de style.
 Un médecin accorde quelques minutes. Le rapport complet en fait vingt pages. Les deux
 existent donc, et l'utilisateur choisit au moment d'exporter.
 
+**Deux à trois pages, pas une à deux.** Mesuré à la largeur utile d'une A4 : la synthèse
+occupe deux pages quand il n'y a aucune mesure ponctuelle, trois quand elle porte des
+prises de tension ou des ECG. La première version imposait exactement deux pages par une
+coupure forcée ; le contenu ne pouvant pas tenir, elle produisait quatre pages — une
+demi-page vide suivie d'un reste. Le document coule désormais, chaque bloc protégé d'une
+coupure interne, et il annonce le compte qu'il tient vraiment.
+
 ### 6.2 Contenu
 
 **Page 1 — ce qui a changé.**
@@ -444,8 +451,11 @@ existent donc, et l'utilisateur choisit au moment d'exporter.
 7. Vitalité : les indicateurs seuls, sans graphique.
 8. Les tableaux d'ECG s'ils portent des lignes.
 
-**Pied de page, sur les deux pages** : « Ce document contient des mesures de santé. » et
-« Cette analyse ne remplace pas un avis médical. »
+**L'avertissement remonte dans l'en-tête** — « Mesures issues d'une montre connectée,
+les mesures au poignet restent indicatives » — et le pied de page ne porte plus que
+« Cette synthèse ne remplace pas un avis médical ». Le répéter sur chaque page demanderait
+un `position: fixed` en impression, dont le rendu varie d'un navigateur à l'autre et qui
+grignote la hauteur utile de toutes les pages.
 
 ### 6.3 Règles d'impression
 

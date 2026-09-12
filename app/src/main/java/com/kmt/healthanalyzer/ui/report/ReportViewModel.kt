@@ -4,14 +4,17 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kmt.healthanalyzer.data.report.ReportExporter
+import com.kmt.healthanalyzer.data.report.SummaryReview
 import com.kmt.healthanalyzer.data.repository.HealthRepository
 import com.kmt.healthanalyzer.domain.report.ReportModel
 import com.kmt.healthanalyzer.domain.report.ReportNarrative
 import com.kmt.healthanalyzer.domain.usecase.AnalyzeReportNarrativeUseCase
 import com.kmt.healthanalyzer.domain.usecase.NarrativeResult
+import com.kmt.healthanalyzer.domain.usecase.ReviewWeekUseCase
 import com.kmt.healthanalyzer.ui.home.TimeRange
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,6 +63,7 @@ class ReportViewModel @Inject constructor(
     private val zone: ZoneId,
     private val exporter: ReportExporter,
     private val analyzeNarrative: AnalyzeReportNarrativeUseCase,
+    private val reviewWeek: ReviewWeekUseCase,
     @ReportSerializationDispatcher private val serializationDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
@@ -139,6 +143,46 @@ class ReportViewModel @Inject constructor(
                     it.copy(
                         isExporting = false,
                         exportError = "L'export a échoué : ${failure.message ?: "cause inconnue"}",
+                    )
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Écrit la synthèse d'une à deux pages destinée à un médecin, puis la partage.
+     *
+     * Deux différences avec [export], et elles comptent toutes les deux :
+     *
+     * - le document ne porte **aucun texte écrit par un modèle de langage**. Le bilan
+     *   rédigé reste dans le rapport complet, où l'utilisateur sait d'où il vient ;
+     * - il porte en revanche le bilan de la semaine écoulée, calculé par le même
+     *   [ReviewWeekUseCase] que l'écran d'accueil et la notification hebdomadaire. Un seul
+     *   calcul : le document remis au médecin ne peut pas contredire l'écran.
+     *
+     * Un échec du bilan hebdomadaire n'annule pas l'export. La synthèse s'ouvre alors sur
+     * la période, sans ce bloc — un document amputé d'une section vaut mieux qu'un document
+     * absent le jour du rendez-vous.
+     */
+    fun exportSummary() {
+        val reportJson = _state.value.reportJson ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(isExporting = true, exportError = null) }
+            try {
+                val reviewJson = withContext(serializationDispatcher) {
+                    runCatching { json.encodeToString(SummaryReview.from(reviewWeek())) }.getOrNull()
+                }
+                val file = exporter.exportSummary(reportJson, reviewJson)
+                _shareEvents.send(exporter.shareIntent(file))
+                _state.update { it.copy(isExporting = false) }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                _state.update {
+                    it.copy(
+                        isExporting = false,
+                        exportError = "La synthèse n'a pas pu être produite : ${failure.message ?: "cause inconnue"}",
                     )
                 }
             }

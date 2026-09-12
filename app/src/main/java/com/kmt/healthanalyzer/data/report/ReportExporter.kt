@@ -61,6 +61,38 @@ class ReportExporter @Inject constructor(
         }
     }
 
+    /**
+     * Écrit la synthèse médecin — une à deux pages — et renvoie le fichier produit.
+     *
+     * Le même dossier de cache que [export], nettoyé de la même façon : il n'existe qu'un
+     * export partageable à la fois, et un ancien document oublié là resterait accessible
+     * indéfiniment.
+     *
+     * @param reviewJson le bloc hebdomadaire déjà formaté ([SummaryReview]), ou `null`
+     */
+    suspend fun exportSummary(
+        reportJson: String,
+        reviewJson: String?,
+        day: LocalDate = LocalDate.now(),
+    ): File = withContext(Dispatchers.IO) {
+        val html = buildSummaryHtml(reportJson, reviewJson)
+        val dir = File(context.cacheDir, EXPORT_DIR_NAME).apply { mkdirs() }
+        dir.listFiles()?.forEach { it.delete() }
+        val file = File(dir, "synthese-sante-$day.html")
+        file.writeText(html, Charsets.UTF_8)
+        file
+    }
+
+    private fun buildSummaryHtml(reportJson: String, reviewJson: String?): String {
+        val template = readAsset(SUMMARY_TEMPLATE_PATH)
+        val styles = ReportExportTemplate.inlineExportFonts(
+            styles = readAsset(STYLES_PATH),
+            serifSemiBoldBase64 = readAssetAsBase64(ReportExportTemplate.SERIF_ASSET_NAME),
+        )
+        val scripts = SUMMARY_SCRIPT_PATHS.joinToString("\n") { readAsset(it) }
+        return ReportExportTemplate.fillSummary(template, styles, scripts, reportJson, reviewJson)
+    }
+
     private fun buildHtml(reportJson: String): String {
         val template = readAsset(TEMPLATE_PATH)
         val styles = ReportExportTemplate.inlineExportFonts(
@@ -90,6 +122,7 @@ class ReportExporter @Inject constructor(
         const val EXPORT_DIR_NAME = "rapports"
 
         private const val TEMPLATE_PATH = "report/export-template.html"
+        private const val SUMMARY_TEMPLATE_PATH = "report/export-summary-template.html"
         private const val STYLES_PATH = "report/report.css"
 
         /** Concaténés dans cet ordre : le contrat de données, le moteur, puis les graphiques. */
@@ -102,6 +135,23 @@ class ReportExporter @Inject constructor(
             "report/report-charts-vitals.js",
             "report/report-sections.js",
             "report/report-render.js",
+        )
+
+        /**
+         * La synthèse n'a pas besoin du moteur d'onglets : elle est linéaire, sans
+         * navigation. Elle remplace donc `report-render.js` par `report-summary.js`, mais
+         * garde `report-sections.js`, dont elle lit les indicateurs et les phrases de
+         * lecture.
+         */
+        private val SUMMARY_SCRIPT_PATHS = listOf(
+            "lib/report-model.js",
+            "report/report-engine.js",
+            "report/report-charts-sleep.js",
+            "report/report-charts-heart.js",
+            "report/report-charts-activity.js",
+            "report/report-charts-vitals.js",
+            "report/report-sections.js",
+            "report/report-summary.js",
         )
     }
 }

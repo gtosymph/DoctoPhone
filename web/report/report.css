@@ -562,6 +562,181 @@
 
 .ha-detail-body { margin-top: 14px; }
 
+/* ============================================================ synthèse médecin */
+
+/*
+ * La synthèse est un document, pas un écran. Elle partage la palette et les polices du
+ * rapport, mais pas sa mise en page : une colonne, des filets, aucune carte ombrée, et une
+ * largeur pensée pour une page A4 plutôt que pour un téléphone.
+ *
+ * Elle ne porte jamais de texte écrit par un modèle de langage — voir `report-summary.js`.
+ */
+.ha-summary {
+  max-width: 760px;
+  padding: 24px 20px 40px;
+}
+
+
+.ha-sum-head { border-bottom: 2px solid var(--ink); padding-bottom: 14px; margin-bottom: 20px; }
+.ha-sum-head h1 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 1.1;
+  letter-spacing: -.02em;
+  margin: 0 0 10px;
+}
+.ha-sum-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.ha-sum-section { margin: 0 0 24px; }
+.ha-sum-section h2 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 20px;
+  margin: 0 0 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--grid);
+}
+.ha-sum-section h3 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 16px 0 6px;
+}
+.ha-sum-lead { color: var(--ink-2); font-size: 14px; margin: 0 0 10px; }
+.ha-sum-quiet { color: var(--ink-2); font-size: 14px; margin: 8px 0 0; }
+
+.ha-sum-table td:first-child { font-weight: 600; color: var(--ink); }
+.ha-sum-note { display: block; font-weight: 400; color: var(--muted); font-size: 11.5px; }
+
+.ha-sum-list { margin: 6px 0 0; padding-left: 18px; }
+.ha-sum-list li { margin-bottom: 5px; }
+
+.ha-sum-domain {
+  border-left: 2px solid var(--domain, var(--accent));
+  padding-left: 10px;
+  margin-bottom: 10px;
+}
+/*
+ * Titre et chiffres sur la même ligne : sur deux lignes, six domaines coûtaient à eux
+ * seuls la moitié d'une page. Le titre reste en serif, les chiffres en sans — la
+ * distinction de famille suffit à les séparer, un retour à la ligne n'y ajoutait rien.
+ */
+.ha-sum-domain h3 {
+  display: inline;
+  margin: 0;
+  margin-right: 8px;
+}
+.ha-sum-figures {
+  display: inline;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+.ha-sum-insight { color: var(--ink-2); font-size: 13.5px; margin: 3px 0 0; max-width: 62ch; }
+
+.ha-sum-card { margin: 0 0 18px; }
+.ha-sum-card h3 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 0 0 6px;
+}
+
+.ha-sum-foot {
+  border-top: 1px solid var(--grid);
+  margin-top: 22px;
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.ha-sum-foot p { margin: 0 0 3px; }
+
+/*
+ * L'impression de la synthèse.
+ *
+ * Ces règles ne s'appliquent qu'à `.ha-summary` : le rapport complet garde les siennes,
+ * plus haut dans le fichier.
+ */
+@media print {
+  @page { size: A4 portrait; margin: 14mm; }
+
+  /*
+   * Le papier est blanc, toujours.
+   *
+   * Sans cette remise à plat, une synthèse ouverte sur un appareil en thème sombre
+   * s'imprime en encre claire — du texte blanc sur du papier blanc. Les navigateurs
+   * suppriment bien les fonds à l'impression (`print-color-adjust: economy`), mais pas
+   * les couleurs de texte : le fond disparaît et l'écriture avec lui.
+   *
+   * Ces valeurs sont celles du bloc `:root` clair, en haut du fichier. Elles y sont
+   * répétées à dessein : une variable ne peut pas se « réinitialiser » à sa valeur d'un
+   * autre bloc.
+   */
+  :root {
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #726f68;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --ring: rgba(11, 11, 11, .10);
+    --accent: #4a3aa7;
+    --accent-soft: rgba(74, 58, 167, .08);
+    --accent-contrast: #ffffff;
+    --good-text: #006300;
+    --warning: #8f6200;
+    --serious: #b04a14;
+    --critical: #d03b3b;
+    --d-sleep: #4a3aa7;
+    --d-sleep-ink: #3a2d85;
+    --d-heart: #cf3446;
+    --d-heart-ink: #a8202f;
+    --d-activity: #0f8a68;
+    --d-activity-ink: #0b6a50;
+    --d-body: #b56a0f;
+    --d-body-ink: #8d520a;
+    --d-vitality: #2a78d6;
+    --d-vitality-ink: #1f5da8;
+  }
+
+  .ha-summary { max-width: none; padding: 0; }
+
+  /* Aucune coupure forcée : voir `report-summary.js`. On protège seulement les blocs. */
+  .ha-summary .ha-sum-section,
+  .ha-summary .ha-sum-card { break-inside: avoid; }
+  .ha-summary h2,
+  .ha-summary h3 { break-after: avoid; }
+
+  /*
+   * Aucun aplat de couleur. L'encre coûte cher et les imprimantes de cabinet sont en noir
+   * et blanc : un fond coloré y devient un gris sale qui gêne la lecture du texte posé
+   * dessus. La couleur de domaine ne subsiste que sur le filet de titre, où elle ne porte
+   * aucune information seule — le titre la double toujours.
+   */
+  .ha-summary .ha-sum-card,
+  .ha-summary .ha-sum-domain { background: none; }
+
+  /*
+   * Les graphiques sont bridés en largeur, pas en hauteur.
+   *
+   * Le SVG porte un `viewBox` et garde son rapport : réduire la largeur réduit la hauteur
+   * d'autant, sans déformer le dessin. Les brider en hauteur aurait laissé `meet` le
+   * centrer entre deux bandes vides.
+   *
+   * 150 mm sur les 182 mm utiles : mesuré, c'est ce qui fait tenir chaque page sur une A4.
+   * Le document vise une à deux pages ; à 182 mm il en occupait quatre.
+   */
+  .ha-summary .ha-chart { width: 150mm; max-width: 100%; margin: 0 auto; }
+}
+
 @media (min-width: 720px) {
   .ha-grid2 { grid-template-columns: 1fr 1fr; }
   .ha-span2 { grid-column: 1 / -1; }
@@ -684,4 +859,13 @@
    */
   .ha-detail-toggle { display: none; }
   .ha-detail-body[hidden] { display: block !important; }
+}
+
+/* L'avertissement de l'en-tête : ce que ce document contient, dit avant tout le reste. */
+.ha-sum-warning {
+  border-left: 3px solid var(--warning);
+  padding: 4px 0 4px 10px;
+  margin: 10px 0 0;
+  color: var(--ink-2);
+  font-size: 12.5px;
 }

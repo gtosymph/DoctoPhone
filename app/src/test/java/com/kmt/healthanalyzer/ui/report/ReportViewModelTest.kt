@@ -14,6 +14,7 @@ import com.kmt.healthanalyzer.domain.report.SleepSection
 import com.kmt.healthanalyzer.domain.report.StressSection
 import com.kmt.healthanalyzer.domain.usecase.AnalyzeReportNarrativeUseCase
 import com.kmt.healthanalyzer.domain.usecase.NarrativeResult
+import com.kmt.healthanalyzer.domain.usecase.ReviewWeekUseCase
 import com.kmt.healthanalyzer.ui.home.TimeRange
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -44,6 +45,7 @@ class ReportViewModelTest {
     private val repository: HealthRepository = mockk()
     private val exporter: ReportExporter = mockk()
     private val analyzeNarrative: AnalyzeReportNarrativeUseCase = mockk()
+    private val reviewWeek: ReviewWeekUseCase = mockk()
 
     @Before
     fun setUp() {
@@ -204,7 +206,8 @@ class ReportViewModelTest {
         assertTrue("le rapport montré ne doit plus porter l'ancien récit", !state.reportJson!!.contains("En forme"))
     }
 
-    private fun newViewModel() = ReportViewModel(repository, zone, exporter, analyzeNarrative, dispatcher)
+    private fun newViewModel() =
+        ReportViewModel(repository, zone, exporter, analyzeNarrative, reviewWeek, dispatcher)
 
     private fun minimalReport(): ReportModel = ReportModel(
         meta = ReportMeta(

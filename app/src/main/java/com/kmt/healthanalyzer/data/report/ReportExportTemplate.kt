@@ -12,6 +12,7 @@ internal object ReportExportTemplate {
     private const val STYLES_MARKER = "{{STYLES}}"
     private const val SCRIPTS_MARKER = "{{SCRIPTS}}"
     private const val MODEL_MARKER = "{{MODEL}}"
+    private const val REVIEW_MARKER = "{{REVIEW}}"
 
     /**
      * Remplace les trois marqueurs du gabarit.
@@ -25,6 +26,30 @@ internal object ReportExportTemplate {
             .replace(STYLES_MARKER, styles)
             .replace(SCRIPTS_MARKER, scripts)
             .replace(MODEL_MARKER, escapeForInlineScript(reportJson))
+
+
+    /**
+     * Remplit le gabarit de la synthèse médecin, qui porte un marqueur de plus.
+     *
+     * [reviewJson] peut valoir `null` : le gabarit pose alors la valeur JSON `null` et la
+     * synthèse s'ouvre directement sur la période, sans bloc hebdomadaire. C'est le cas de
+     * la version web, qui n'a pas de moteur de dérives.
+     *
+     * Même ordre qu'[fill], et pour la même raison : les deux charges utiles JSON sont
+     * remplacées en dernier, pour qu'un contenu qui porterait par hasard la chaîne
+     * `{{STYLES}}` ne soit pas retouché par un remplacement suivant.
+     */
+    fun fillSummary(
+        template: String,
+        styles: String,
+        scripts: String,
+        reportJson: String,
+        reviewJson: String?,
+    ): String = template
+        .replace(STYLES_MARKER, styles)
+        .replace(SCRIPTS_MARKER, scripts)
+        .replace(MODEL_MARKER, escapeForInlineScript(reportJson))
+        .replace(REVIEW_MARKER, escapeForInlineScript(reviewJson ?: "null"))
 
     /**
      * Échappe un JSON pour un `<script type="application/json">` inline.

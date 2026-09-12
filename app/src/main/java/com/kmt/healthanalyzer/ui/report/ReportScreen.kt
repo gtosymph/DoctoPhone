@@ -88,6 +88,7 @@ fun ReportScreen(
         onRangeSelected = viewModel::selectRange,
         onRefresh = viewModel::refresh,
         onExport = viewModel::export,
+        onExportSummary = viewModel::exportSummary,
         onWriteNarrative = viewModel::writeNarrative,
         modifier = modifier,
     )
@@ -108,6 +109,7 @@ fun ReportContent(
     onRangeSelected: (TimeRange) -> Unit,
     onRefresh: () -> Unit,
     onExport: () -> Unit,
+    onExportSummary: () -> Unit,
     onWriteNarrative: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -130,7 +132,11 @@ fun ReportContent(
     if (showExportConfirmation) {
         ExportConfirmationDialog(
             periodLabel = state.range.label,
-            onConfirm = {
+            onExportSummary = {
+                showExportConfirmation = false
+                onExportSummary()
+            },
+            onExportFull = {
                 showExportConfirmation = false
                 onExport()
             },
@@ -299,26 +305,49 @@ private fun NarrativeRow(state: ReportUiState, onWriteNarrative: () -> Unit) {
 }
 
 /**
- * Avertit avant de partager le rapport : le fichier produit contient des mesures de
- * santé détaillées, et le partage — une fois fait — n'est plus sous le contrôle de l'app.
+ * Demande quel document produire, et avertit de ce qu'il contient.
  *
- * Le message nomme la période couverte et précise qu'il s'agit de mesures détaillées, pas
- * d'un simple résumé, pour que la décision de partager se prenne en connaissance de cause.
+ * Deux documents, deux usages. La **synthèse** tient sur deux à trois pages : un médecin
+ * accorde quelques minutes, et le rapport complet en demande beaucoup plus. Le **rapport
+ * complet** porte toutes les mesures, jour par jour, et convient pour garder ou relire.
+ *
+ * L'avertissement vaut pour les deux : le partage, une fois fait, n'est plus sous le
+ * contrôle de l'app. Le message nomme la période couverte pour que la décision se prenne
+ * en connaissance de cause.
  */
 @Composable
-private fun ExportConfirmationDialog(periodLabel: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+private fun ExportConfirmationDialog(
+    periodLabel: String,
+    onExportSummary: () -> Unit,
+    onExportFull: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Exporter le bilan") },
+        title = { Text("Quel document ?") },
         text = {
-            Text(
-                "Le fichier produit couvre la période « $periodLabel » et porte vos mesures " +
-                    "de santé détaillées, jour par jour — pas un simple résumé. Ne le partagez " +
-                    "qu'avec des personnes à qui vous voulez les confier.",
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "La synthèse tient sur deux à trois pages : les mesures clés de la période " +
+                        "« $periodLabel », le bilan de la semaine écoulée et quatre graphiques. " +
+                        "Elle ne porte aucun texte rédigé par le modèle de langage.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    "Le rapport complet porte vos mesures détaillées, jour par jour, et le " +
+                        "bilan rédigé s'il existe.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    "Les deux contiennent des mesures de santé : ne les partagez qu'avec des " +
+                        "personnes à qui vous voulez les confier.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         },
-        confirmButton = { TextButton(onClick = onConfirm) { Text("Exporter") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+        confirmButton = { TextButton(onClick = onExportSummary) { Text("Synthèse") } },
+        dismissButton = { TextButton(onClick = onExportFull) { Text("Rapport complet") } },
     )
 }
 
